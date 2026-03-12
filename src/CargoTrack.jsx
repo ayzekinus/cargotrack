@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { supabase } from "./supabase.js";
+import { supabase, isConfigured } from "./supabase.js";
 
 // Data is loaded from Supabase on mount
 const INITIAL_CONTAINERS = [
@@ -537,6 +537,40 @@ export default function App({ currentUser, onLogout }) {
     setShowKapatModal(false);
     setActiveTab("liste");
   };
+
+  // Supabase henüz yapılandırılmamışsa kurulum ekranı göster
+  if (!isConfigured) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Roboto', sans-serif", padding: 24 }}>
+        <div style={{ maxWidth: 540, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "40px", textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⬡</div>
+          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>CARGO<span style={{ color: "#3b82f6" }}>TRACK</span></div>
+          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning System</div>
+          <div style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: 8, padding: "20px", marginBottom: 28, textAlign: "left" }}>
+            <div style={{ color: "#fbbf24", fontWeight: 700, fontSize: 13, marginBottom: 12 }}>&#9888; Supabase Yapilandirmasi Gerekli</div>
+            <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.8 }}>
+              src/supabase.js dosyasini acin ve su iki degeri doldurun:
+              <div style={{ marginTop: 12, background: "rgba(0,0,0,0.3)", borderRadius: 6, padding: "12px 14px", fontFamily: "monospace", fontSize: 11, color: "#6ee7b7" }}>
+                <div>{"const SUPABASE_URL = "}<span style={{ color: "#fcd34d" }}>{""https://xxxx.supabase.co""}</span>{";"}</div>
+                <div style={{ marginTop: 4 }}>{"const SUPABASE_ANON_KEY = "}<span style={{ color: "#fcd34d" }}>{""eyJhbGci...""}</span>{";"}</div>
+              </div>
+              <div style={{ marginTop: 12, color: "#64748b", fontSize: 11 }}>
+                Bu degerleri supabase.com - Settings - API bolumunden alabilirsiniz. Detayli rehber icin SUPABASE-SETUP.md dosyasina bakin.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{ background: "#1d6abf", color: "#fff", borderRadius: 6, padding: "11px", fontWeight: 700, fontSize: 12, letterSpacing: 1, textDecoration: "none", textTransform: "uppercase", display: "block" }}>
+              1. Supabase Ac
+            </a>
+            <a href="https://github.com" target="_blank" rel="noreferrer" style={{ background: "rgba(255,255,255,0.08)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "11px", fontWeight: 700, fontSize: 12, letterSpacing: 1, textDecoration: "none", textTransform: "uppercase", display: "block" }}>
+              2. Kodu Guncelle
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "'Roboto', sans-serif", background: "#f0f4f8", minHeight: "100vh", color: "#1e293b", boxShadow: "none" }}>
