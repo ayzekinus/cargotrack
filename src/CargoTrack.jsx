@@ -551,8 +551,8 @@ export default function App({ currentUser, onLogout }) {
             <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.8 }}>
               src/supabase.js dosyasini acin ve su iki degeri doldurun:
               <div style={{ marginTop: 12, background: "rgba(0,0,0,0.3)", borderRadius: 6, padding: "12px 14px", fontFamily: "monospace", fontSize: 11, color: "#6ee7b7" }}>
-                <div>{"const SUPABASE_URL = "}<span style={{ color: "#fcd34d" }}>{""https://xxxx.supabase.co""}</span>{";"}</div>
-                <div style={{ marginTop: 4 }}>{"const SUPABASE_ANON_KEY = "}<span style={{ color: "#fcd34d" }}>{""eyJhbGci...""}</span>{";"}</div>
+                <div>{"const SUPABASE_URL = "}<span style={{ color: "#fcd34d" }}>{"'https://xxxx.supabase.co'"}</span>{";"}</div>
+                <div style={{ marginTop: 4 }}>{"const SUPABASE_ANON_KEY = "}<span style={{ color: "#fcd34d" }}>{"'eyJhbGci...'"}</span>{";"}</div>
               </div>
               <div style={{ marginTop: 12, color: "#64748b", fontSize: 11 }}>
                 Bu degerleri supabase.com - Settings - API bolumunden alabilirsiniz. Detayli rehber icin SUPABASE-SETUP.md dosyasina bakin.
