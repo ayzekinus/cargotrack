@@ -543,9 +543,9 @@ export default function App({ currentUser, onLogout }) {
     return (
       <div style={{ minHeight: "100vh", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Roboto', sans-serif", padding: 24 }}>
         <div style={{ maxWidth: 540, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "40px", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⬡</div>
-          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>CARGO<span style={{ color: "#3b82f6" }}>TRACK</span></div>
-          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning System</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>NL</div>
+          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>Ned<span style={{ color: "#3b82f6" }}>Line</span></div>
+          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning</div>
           <div style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: 8, padding: "20px", marginBottom: 28, textAlign: "left" }}>
             <div style={{ color: "#fbbf24", fontWeight: 700, fontSize: 13, marginBottom: 12 }}>&#9888; Supabase Yapilandirmasi Gerekli</div>
             <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.8 }}>
