@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
-// 'cargotrack' yerine GitHub'daki repo adınızı yazın
 const REPO_NAME = "cargotrack";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   base: `/${REPO_NAME}/`,
   build: {
     outDir: "dist",

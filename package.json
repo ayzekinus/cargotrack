@@ -2,6 +2,7 @@
   "name": "cargotrack",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -14,6 +15,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
     "vite": "^5.1.0"
   }
 }
