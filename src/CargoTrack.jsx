@@ -234,6 +234,8 @@ export default function App({ currentUser, onLogout }) {
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   };
 
+  const toplamKm = (hareketler) => hareketler.reduce((s, h) => s + (Number(h.km) || 0), 0);
+
   const SURCHARGE_TIPLERI = {
     custom_stop: { label: "🛑 Custom Stop", color: "#dc2626", bg: "#fee2e2", border: "#fca5a5" },
     bekleme:     { label: "⏱ Waiting",      color: "#d97706", bg: "#fef3c7", border: "#fcd34d" },
