@@ -93,7 +93,8 @@ export default function App({ currentUser, onLogout }) {
   const [dbError, setDbError] = useState("");
   const [kmLoading, setKmLoading] = useState(false);
   const [kmError, setKmError] = useState("");
-  const [kgError, setKgError] = useState("");
+  const [addErrors, setAddErrors] = useState({});
+  const [editErrors, setEditErrors] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [newContainer, setNewContainer] = useState({
@@ -521,12 +522,12 @@ export default function App({ currentUser, onLogout }) {
   };
 
   const handleAddHareket = async () => {
-    if (!newHareket.surucu || !newHareket.konum) return;
-    if (!newHareket.kg || Number(newHareket.kg) <= 0) {
-      setKgError("Weight (KG) is required for CO₂ calculation.");
-      return;
-    }
-    setKgError("");
+    const errs = {};
+    if (!newHareket.surucu) errs.surucu = "Driver is required.";
+    if (!newHareket.konum) errs.konum = "Location / Route is required.";
+    if (!newHareket.kg || Number(newHareket.kg) <= 0) errs.kg = "Weight (KG) is required for CO₂ calculation.";
+    if (Object.keys(errs).length > 0) { setAddErrors(errs); return; }
+    setAddErrors({});
     const { data: hData, error } = await supabase.from("hareketler").insert({
       container_id: selectedContainer.id,
       tarih: newHareket.tarih,
@@ -557,7 +558,12 @@ export default function App({ currentUser, onLogout }) {
   };
 
   const handleSaveEditHareket = async () => {
-    if (!editHareket.surucu || !editHareket.konum) return;
+    const errs = {};
+    if (!editHareket.surucu) errs.surucu = "Driver is required.";
+    if (!editHareket.konum) errs.konum = "Location / Route is required.";
+    if (!editHareket.kg || Number(editHareket.kg) <= 0) errs.kg = "Weight (KG) is required for CO₂ calculation.";
+    if (Object.keys(errs).length > 0) { setEditErrors(errs); return; }
+    setEditErrors({});
     const updated = { ...editHareket, surcharges: editSurchargeLines };
     if (editHareket._id) {
       const { error } = await supabase.from("hareketler").update({
@@ -1446,8 +1452,10 @@ export default function App({ currentUser, onLogout }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[["Driver", "surucu", "Driver name"], ["Company", "firma", "Company name"]].map(([label, key, ph]) => (
                 <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                  <input className="input" placeholder={ph} value={newHareket[key]} onChange={e => setNewHareket(p => ({ ...p, [key]: e.target.value }))} />
+                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: addErrors[key] ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}{addErrors[key] && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {addErrors[key]}</span>}</div>
+                  <input className="input" placeholder={ph} value={newHareket[key]}
+                    onChange={e => { setNewHareket(p => ({ ...p, [key]: e.target.value })); setAddErrors(p => ({ ...p, [key]: "" })); }}
+                    style={{ borderColor: addErrors[key] ? "#dc2626" : undefined }} />
                 </div>
               ))}
             </div>
@@ -1479,9 +1487,9 @@ export default function App({ currentUser, onLogout }) {
                 <input type="number" className="input" min="0"
                   placeholder={newHareket.yukDurumu === "loaded" ? "e.g. 24000 (cargo + container)" : newHareket.yukDurumu === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
                   value={newHareket.kg}
-                  onChange={e => { setNewHareket(p => ({ ...p, kg: e.target.value })); setKgError(""); }}
-                  style={{ textAlign: "right", borderColor: kgError ? "#dc2626" : undefined }} />
-                {kgError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kgError}</div>}
+                  onChange={e => { setNewHareket(p => ({ ...p, kg: e.target.value })); setAddErrors(p => ({ ...p, kg: "" })); }}
+                  style={{ textAlign: "right", borderColor: addErrors.kg ? "#dc2626" : undefined }} />
+                {addErrors.kg && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {addErrors.kg}</div>}
                 <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
                   {newHareket.yukDurumu === "loaded" ? "Total weight including cargo and container" : newHareket.yukDurumu === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
                 </div>
@@ -1491,7 +1499,8 @@ export default function App({ currentUser, onLogout }) {
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Location / Route</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" placeholder="Start → Destination" value={newHareket.konum}
-                  onChange={e => { setNewHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); }} />
+                  onChange={e => { setNewHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); setAddErrors(p => ({ ...p, konum: "" })); }}
+                  style={{ borderColor: addErrors.konum ? "#dc2626" : undefined }} />
                 <button type="button" className="btn btn-primary" style={{ whiteSpace: "nowrap", fontSize: 10, padding: "8px 12px", flexShrink: 0 }}
                   onClick={() => calculateKm(newHareket.konum, (km) => setNewHareket(p => ({ ...p, km })))}
                   disabled={kmLoading || !newHareket.konum.includes("→")}
@@ -1499,6 +1508,7 @@ export default function App({ currentUser, onLogout }) {
                   {kmLoading ? "⏳" : "📍 Calculate KM"}
                 </button>
               </div>
+              {addErrors.konum && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {addErrors.konum}</div>}
               {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kmError}</div>}
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
                 Enter as "Start → Destination" then click Calculate KM
@@ -1628,7 +1638,7 @@ export default function App({ currentUser, onLogout }) {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddHareket}>💾 Save Movement</button>
-              <button className="btn btn-ghost" onClick={() => { setShowAddHareket(false); setSurchargeLines([]); setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" }); }}>Cancel</button>
+              <button className="btn btn-ghost" onClick={() => { setShowAddHareket(false); setSurchargeLines([]); setAddErrors({}); setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" }); }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1734,8 +1744,10 @@ export default function App({ currentUser, onLogout }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[["Driver", "surucu", "Driver name"], ["Company", "firma", "Company name"]].map(([label, key, ph]) => (
                 <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                  <input className="input" placeholder={ph} value={editHareket[key] || ""} onChange={e => setEditHareket(p => ({ ...p, [key]: e.target.value }))} />
+                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: editErrors[key] ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}{editErrors[key] && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {editErrors[key]}</span>}</div>
+                  <input className="input" placeholder={ph} value={editHareket[key] || ""}
+                    onChange={e => { setEditHareket(p => ({ ...p, [key]: e.target.value })); setEditErrors(p => ({ ...p, [key]: "" })); }}
+                    style={{ borderColor: editErrors[key] ? "#dc2626" : undefined }} />
                 </div>
               ))}
             </div>
@@ -1767,8 +1779,9 @@ export default function App({ currentUser, onLogout }) {
                 <input type="number" className="input" min="0"
                   placeholder={(editHareket.yukDurumu || "loaded") === "loaded" ? "e.g. 24000 (cargo + container)" : (editHareket.yukDurumu || "loaded") === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
                   value={editHareket.kg || ""}
-                  onChange={e => setEditHareket(p => ({ ...p, kg: e.target.value }))}
-                  style={{ textAlign: "right" }} />
+                  onChange={e => { setEditHareket(p => ({ ...p, kg: e.target.value })); setEditErrors(p => ({ ...p, kg: "" })); }}
+                  style={{ textAlign: "right", borderColor: editErrors.kg ? "#dc2626" : undefined }} />
+                {editErrors.kg && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {editErrors.kg}</div>}
                 <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
                   {(editHareket.yukDurumu || "loaded") === "loaded" ? "Total weight including cargo and container" : (editHareket.yukDurumu || "loaded") === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
                 </div>
@@ -1778,7 +1791,8 @@ export default function App({ currentUser, onLogout }) {
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Location / Route</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input className="input" placeholder="Start → Destination" value={editHareket.konum || ""}
-                  onChange={e => { setEditHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); }} />
+                  onChange={e => { setEditHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); setEditErrors(p => ({ ...p, konum: "" })); }}
+                  style={{ borderColor: editErrors.konum ? "#dc2626" : undefined }} />
                 <button type="button" className="btn btn-primary" style={{ whiteSpace: "nowrap", fontSize: 10, padding: "8px 12px", flexShrink: 0 }}
                   onClick={() => calculateKm(editHareket.konum || "", (km) => setEditHareket(p => ({ ...p, km })))}
                   disabled={kmLoading || !(editHareket.konum || "").includes("→")}
@@ -1786,6 +1800,7 @@ export default function App({ currentUser, onLogout }) {
                   {kmLoading ? "⏳" : "📍 Calculate KM"}
                 </button>
               </div>
+              {editErrors.konum && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {editErrors.konum}</div>}
               {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kmError}</div>}
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
                 Enter as "Start → Destination" then click Calculate KM
@@ -1916,7 +1931,7 @@ export default function App({ currentUser, onLogout }) {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveEditHareket}>💾 Save Changes</button>
-              <button className="btn btn-ghost" onClick={() => { setEditHareketIdx(null); setEditHareket(null); setEditSurchargeLines([]); }}>Cancel</button>
+              <button className="btn btn-ghost" onClick={() => { setEditHareketIdx(null); setEditHareket(null); setEditSurchargeLines([]); setEditErrors({}); }}>Cancel</button>
             </div>
           </div>
         </div>
