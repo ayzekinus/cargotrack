@@ -38,6 +38,8 @@ create table if not exists hareketler (
   referans       text default '',
   yuk_durumu     text default 'loaded',
   yuk_notu       text default '',
+  euronorm       text default 'euro6',
+  kg             numeric,
   surcharges     jsonb default '[]'
 );
 
@@ -84,3 +86,10 @@ insert into chassis (id, chassis_no, plaka_no, tip) values
   ('CH-004', 'CHS-007', '34 KLM 007', '{"20FT","40FT"}'),
   ('CH-005', 'CHS-019', '34 NOP 019', '{"40FT"}')
 on conflict (id) do nothing;
+
+-- ── MIGRATION: Mevcut veritabanına euronorm kolonu ekle ──────
+-- Eğer veritabanını daha önce kurduysanız bu komutu SQL Editor'da çalıştırın:
+alter table hareketler add column if not exists euronorm text default 'euro6';
+
+-- ── MIGRATION: Mevcut veritabanına kg kolonu ekle ────────────
+alter table hareketler add column if not exists kg numeric;

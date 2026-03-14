@@ -91,12 +91,16 @@ export default function App({ currentUser, onLogout }) {
   const [forecastPreviewError, setForecastPreviewError] = useState("");
   const [dbLoading, setDbLoading] = useState(true);
   const [dbError, setDbError] = useState("");
+  const [kmLoading, setKmLoading] = useState(false);
+  const [kmError, setKmError] = useState("");
+  const [kgError, setKgError] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [newContainer, setNewContainer] = useState({
     containerNo: "", chassisNo: "", musteri: "", limanCikis: today(), containerType: "20FT", kg: "", adr: false,
   });
   const [newHareket, setNewHareket] = useState({
-    tarih: today(), surucu: "", konum: "", aciklama: "", km: "", firma: "", referans: "", yukDurumu: "loaded", yukNotu: "",
+    tarih: today(), surucu: "", konum: "", aciklama: "", km: "", kg: "", firma: "", referans: "", yukDurumu: "loaded", yukNotu: "", euronorm: "euro6",
   });
   const [surchargeLines, setSurchargeLines] = useState([]);
   const [newSurcharge, setNewSurcharge] = useState({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
@@ -135,6 +139,8 @@ export default function App({ currentUser, onLogout }) {
           referans: h.referans || "",
           yukDurumu: h.yuk_durumu || "loaded",
           yukNotu: h.yuk_notu || "",
+          euronorm: h.euronorm || "euro6",
+          kg: h.kg || "",
           surcharges: h.surcharges || [],
         });
       });
@@ -182,10 +188,8 @@ export default function App({ currentUser, onLogout }) {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Supabase: helper to generate next ID ─────────────────
-  const nextId = (prefix, list) => {
-    const nums = list.map(x => parseInt(x.id.replace(prefix + "-", "")) || 0);
-    const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return `${prefix}-${String(max + 1).padStart(3, "0")}`;
+  const nextId = (prefix) => {
+    return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   };
 
   const SURCHARGE_TIPLERI = {
@@ -195,7 +199,33 @@ export default function App({ currentUser, onLogout }) {
     diger:       { label: "📎 Other",        color: "#7c3aed", bg: "#ede9fe", border: "#c4b5fd" },
   };
 
-  const surchargeToplamHareket = (h) => (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
+  const EMISSION_FACTORS = {
+    euro6:    { label: "Euro 6",         factor: 0.055, color: "#059669", bg: "#d1fae5", border: "#6ee7b7" },
+    euro5:    { label: "Euro 5",         factor: 0.062, color: "#d97706", bg: "#fef3c7", border: "#fcd34d" },
+    euro4:    { label: "Euro 4",         factor: 0.080, color: "#dc2626", bg: "#fee2e2", border: "#fca5a5" },
+    full:     { label: "Full Load (40t)",factor: 0.047, color: "#1d6abf", bg: "#dbeafe", border: "#93c5fd" },
+    half:     { label: "Half Load",      factor: 0.089, color: "#7c3aed", bg: "#ede9fe", border: "#c4b5fd" },
+    ship:     { label: "Ship",           factor: 0.008, color: "#0891b2", bg: "#e0f2fe", border: "#7dd3fc" },
+    train:    { label: "Train",          factor: 0.018, color: "#0d9488", bg: "#ccfbf1", border: "#5eead4" },
+  };
+
+  const calcCO2 = (km, kgStr, euronorm) => { // kgStr = movement-level kg
+    const k = Number(km) || 0;
+    const tons = (Number(kgStr) || 0) / 1000;
+    const ef = EMISSION_FACTORS[euronorm] || EMISSION_FACTORS.euro6;
+    if (k === 0 || tons === 0) return null;
+    return Math.round(k * tons * ef.factor * 10) / 10; // kg CO2, 1 decimal
+  };
+
+  const co2Container = (c) => c.hareketler.reduce((sum, h) => {
+    const v = calcCO2(h.km, h.kg || c.kg, h.euronorm || "euro6");
+    return sum + (v || 0);
+  }, 0);
+
+  const co2AllActive = () => aktifler.reduce((s, c) => s + co2Container(c), 0);
+  const co2AllTotal  = () => containers.reduce((s, c) => s + co2Container(c), 0);
+
+    const surchargeToplamHareket = (h) => (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
   const surchargeToplamTumu = (hareketler) => hareketler.reduce((s, h) => s + surchargeToplamHareket(h), 0);
   const totalKm = (hareketler) => hareketler.reduce((s, h) => s + (Number(h.km) || 0), 0);
 
@@ -363,6 +393,41 @@ export default function App({ currentUser, onLogout }) {
     });
   }, [allHareketler, hareketFilter]);
 
+  // ── KM Auto-Calculate (Nominatim + OSRM) ────────────────────
+  const calculateKm = async (konumStr, setter) => {
+    const parts = konumStr.split("→").map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      setKmError("Please enter route as: Start → Destination");
+      return;
+    }
+    setKmLoading(true);
+    setKmError("");
+    try {
+      const geocode = async (place) => {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json&limit=1`,
+          { headers: { "Accept-Language": "en" } }
+        );
+        const data = await res.json();
+        if (!data || data.length === 0) throw new Error(`Location not found: "${place}"`);
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      };
+      const [start, end] = await Promise.all([geocode(parts[0]), geocode(parts[parts.length - 1])]);
+      const routeRes = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=false`
+      );
+      const routeData = await routeRes.json();
+      if (routeData.code !== "Ok" || !routeData.routes || routeData.routes.length === 0) {
+        throw new Error("Could not calculate route between these locations.");
+      }
+      const km = Math.round(routeData.routes[0].distance / 1000);
+      setter(km);
+    } catch (err) {
+      setKmError(err.message || "KM calculation failed.");
+    }
+    setKmLoading(false);
+  };
+
   const downloadCSV = (rows, headers, filename) => {
     const bom = "\uFEFF";
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
@@ -373,10 +438,13 @@ export default function App({ currentUser, onLogout }) {
   };
 
   const exportHareketlerCSV = () => {
-    const headers = ["Date","Container No","Customer","Driver","Location/Route","KM","Company","Reference","Load Status","Surcharge (TL)","Load Note"];
+    const headers = ["Date","Container No","Customer","Driver","Location/Route","KM","Euro Norm","CO2 (kg)","Company","Reference","Load Status","Surcharge (TL)","Load Note"];
     const rows = filteredHareketler.map(h => [
       h.tarih, h.containerNo, h.musteri, h.surucu || "", h.konum || "",
-      h.km || 0, h.firma || "", h.referans || "",
+      h.km || 0,
+      h.euronorm || "euro6",
+      (() => { const cont = containers.find(c => c.containerNo === h.containerNo); return calcCO2(h.km, h.kg || cont?.kg, h.euronorm) || 0; })(),
+      h.firma || "", h.referans || "",
       h.yukDurumu || "loaded",
       (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0),
       h.yukNotu || "",
@@ -454,6 +522,11 @@ export default function App({ currentUser, onLogout }) {
 
   const handleAddHareket = async () => {
     if (!newHareket.surucu || !newHareket.konum) return;
+    if (!newHareket.kg || Number(newHareket.kg) <= 0) {
+      setKgError("Weight (KG) is required for CO₂ calculation.");
+      return;
+    }
+    setKgError("");
     const { data: hData, error } = await supabase.from("hareketler").insert({
       container_id: selectedContainer.id,
       tarih: newHareket.tarih,
@@ -465,6 +538,8 @@ export default function App({ currentUser, onLogout }) {
       referans: newHareket.referans,
       yuk_durumu: newHareket.yukDurumu,
       yuk_notu: newHareket.yukNotu,
+      euronorm: newHareket.euronorm || "euro6",
+      kg: newHareket.kg ? Number(newHareket.kg) : null,
       surcharges: surchargeLines,
     }).select().single();
     if (error) { alert("Error saving movement: " + error.message); return; }
@@ -475,7 +550,7 @@ export default function App({ currentUser, onLogout }) {
         : c
     ));
     setSelectedContainer(prev => ({ ...prev, hareketler: [...prev.hareketler, hareketWithSurcharges] }));
-    setNewHareket({ tarih: today(), surucu: "", konum: "", aciklama: "", km: "", firma: "", referans: "", yukDurumu: "loaded", yukNotu: "" });
+    setNewHareket({ tarih: today(), surucu: "", konum: "", aciklama: "", km: "", kg: "", firma: "", referans: "", yukDurumu: "loaded", yukNotu: "", euronorm: "euro6" });
     setSurchargeLines([]);
     setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
     setShowAddHareket(false);
@@ -495,6 +570,8 @@ export default function App({ currentUser, onLogout }) {
         referans: editHareket.referans,
         yuk_durumu: editHareket.yukDurumu,
         yuk_notu: editHareket.yukNotu,
+        euronorm: editHareket.euronorm || "euro6",
+        kg: editHareket.kg ? Number(editHareket.kg) : null,
         surcharges: editSurchargeLines,
       }).eq("id", editHareket._id);
       if (error) { alert("Error updating movement: " + error.message); return; }
@@ -543,9 +620,9 @@ export default function App({ currentUser, onLogout }) {
     return (
       <div style={{ minHeight: "100vh", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Roboto', sans-serif", padding: 24 }}>
         <div style={{ maxWidth: 540, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "40px", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>NL</div>
-          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>Ned<span style={{ color: "#3b82f6" }}>Line</span></div>
-          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⬡</div>
+          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>CARGO<span style={{ color: "#3b82f6" }}>TRACK</span></div>
+          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning System</div>
           <div style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: 8, padding: "20px", marginBottom: 28, textAlign: "left" }}>
             <div style={{ color: "#fbbf24", fontWeight: 700, fontSize: 13, marginBottom: 12 }}>&#9888; Supabase Yapilandirmasi Gerekli</div>
             <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.8 }}>
@@ -602,27 +679,47 @@ export default function App({ currentUser, onLogout }) {
         .badge-closed { background: #f1f5f9; color: #94a3b8; border: 1px solid #d1d5db; }
         .table-row { border-bottom: 1px solid #e2e8f0; transition: background 0.15s; cursor: pointer; }
         .table-row:hover { background: #f8fafc; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 28px; width: 480px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,0.12); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-start; justify-content: center; z-index: 100; overflow-y: auto; padding: 20px 0; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 28px; width: 480px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,0.12); margin: auto; }
         .hareket-row { border-left: 2px solid #3b82f6; padding: 10px 14px; margin-bottom: 8px; background: #f8fafc; border-radius: 0 3px 3px 0; }
         .hareket-row:last-child { border-left-color: #059669; }
         .detail-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; }
+        .mobile-only { display: none; }
+        .desktop-only { display: flex; }
+        @media (max-width: 768px) {
+          .mobile-only { display: flex !important; }
+          .desktop-only { display: none !important; }
+          .modal { width: 100% !important; max-width: 100vw !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; padding: 20px 16px !important; }
+          .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+          .card { padding: 14px !important; }
+          .stat-card { padding: 14px 16px !important; }
+          .btn { font-size: 11px !important; padding: 8px 12px !important; }
+        }
+        @media (max-width: 480px) {
+          .modal { border-radius: 0 !important; }
+        }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "0 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 32 }}>
-          <div style={{ padding: "16px 0" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: 4, color: "#1d6abf", textTransform: "uppercase" }}>
-              ⬡ CARGO<span style={{ color: "#1e293b" }}>TRACK</span>
+      <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "0 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ padding: "12px 0" }}>
+            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase" }}>
+              Ned<span style={{ color: "#1e293b" }}>Line</span>
             </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b", letterSpacing: 2 }}>CONTAINER PLANNING SYSTEM</div>
+            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 8, color: "#64748b", letterSpacing: 2 }}>CONTAINER PLANNING</div>
           </div>
-          <nav style={{ display: "flex", gap: 4, marginLeft: 16 }}>
+          {/* Desktop Nav */}
+          <nav className="desktop-only" style={{ gap: 2, marginLeft: 8 }}>
             {[["dashboard", "🏠 Dashboard"], ["forecast", "📋 Forecast"], ["liste", "📦 Containers"], ["hareketler", "🚛 Movements"], ["ayarlar", "⚙️ Settings"]].map(([key, label]) => (
               <button key={key} className={`nav-btn ${activeTab === key ? "active" : ""}`} onClick={() => { setActiveTab(key); setSelectedContainer(null); }}>{label}</button>
             ))}
           </nav>
+          {/* Mobile Hamburger */}
+          <button className="mobile-only" onClick={() => setMobileMenuOpen(p => !p)}
+            style={{ marginLeft: "auto", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, padding: "8px 10px", cursor: "pointer", fontSize: 18, color: "#64748b" }}>
+            {mobileMenuOpen ? "✕" : "☰"}
+          </button>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
             {currentUser && (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -644,8 +741,27 @@ export default function App({ currentUser, onLogout }) {
         </div>
       </div>
 
+      {/* MOBILE NAV DROPDOWN */}
+      {mobileMenuOpen && (
+        <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "8px 16px" }}>
+          {[["dashboard", "🏠 Dashboard"], ["forecast", "📋 Forecast"], ["liste", "📦 Containers"], ["hareketler", "🚛 Movements"], ["ayarlar", "⚙️ Settings"]].map(([key, label]) => (
+            <button key={key}
+              onClick={() => { setActiveTab(key); setSelectedContainer(null); setMobileMenuOpen(false); }}
+              style={{ display: "block", width: "100%", textAlign: "left", background: activeTab === key ? "#dbeafe" : "none", border: "none", borderRadius: 4, padding: "12px 14px", fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 1, color: activeTab === key ? "#1d6abf" : "#64748b", cursor: "pointer", marginBottom: 2 }}>
+              {label}
+            </button>
+          ))}
+          {currentUser && (
+            <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#475569" }}>{currentUser.name} <span style={{ color: "#94a3b8", fontSize: 10 }}>({currentUser.role})</span></div>
+              <button onClick={onLogout} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 3, padding: "5px 10px", cursor: "pointer", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, color: "#64748b" }}>Sign Out</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* CONTENT */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 16px" }}>
 
         {/* DB LOADING OVERLAY */}
         {dbLoading && (
@@ -687,7 +803,7 @@ export default function App({ currentUser, onLogout }) {
             <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 300, fontSize: 11, letterSpacing: 3, color: "#64748b", textTransform: "uppercase", marginBottom: 20 }}>
               SİSTEM DURUMU — {new Date().toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
               {[
                 { label: "Aktif Container", value: aktifler.length, color: "#1d6abf", sub: "Şu an sahada" },
                 { label: "Completed", value: kapalilar.length, color: "#059669", sub: "Bu ay" },
@@ -701,6 +817,24 @@ export default function App({ currentUser, onLogout }) {
                 </div>
               ))}
             </div>
+
+            {/* CARBON WIDGET */}
+            {co2AllTotal() > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: "🌍 Total CO₂ (Fleet)", value: `${(co2AllTotal() / 1000).toFixed(2)} t`, sub: `${co2AllTotal().toFixed(1)} kg CO₂`, color: "#059669" },
+                  { label: "⚡ Active Ops CO₂",    value: `${(co2AllActive() / 1000).toFixed(2)} t`, sub: `${aktifler.length} active containers`, color: "#d97706" },
+                  { label: "🌳 Tree Equivalent",   value: `${Math.round(co2AllTotal() / 21)}`, sub: "trees/year to offset", color: "#047857" },
+                  { label: "💶 Carbon Cost",        value: `€${Math.round(co2AllTotal() / 1000 * 18)}`, sub: "~€18/ton CO₂ estimate", color: "#7c3aed" },
+                ].map(({ label, value, sub, color }) => (
+                  <div key={label} className="stat-card" style={{ borderLeft: `3px solid ${color}` }}>
+                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 28, color, lineHeight: 1 }}>{value}</div>
+                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="card">
               <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase", marginBottom: 16 }}>
@@ -972,15 +1106,15 @@ export default function App({ currentUser, onLogout }) {
             </div>
 
             <div className="card" style={{ padding: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.7fr 0.9fr 0.8fr 0.9fr", gap: 6, padding: "10px 16px", fontFamily: "'Roboto', sans-serif", fontSize: 9, letterSpacing: 1.5, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0" }}>
-                <span>Date</span><span>Container</span><span>Customer</span><span>Driver</span><span>Location / Route</span><span>KM</span><span>Company</span><span>Load</span><span>Surcharge</span>
+              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.6fr 0.6fr 0.8fr 0.8fr", gap: 6, padding: "10px 16px", fontFamily: "'Roboto', sans-serif", fontSize: 9, letterSpacing: 1.5, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0" }}>
+                <span>Date</span><span>Container</span><span>Customer</span><span>Driver</span><span>Location / Route</span><span>KM</span><span>CO₂</span><span>Load</span><span>Surcharge</span>
               </div>
               {filteredHareketler.length === 0 ? (
                 <div style={{ textAlign: "center", color: "#64748b", padding: "40px", fontFamily: "'Roboto', sans-serif", fontSize: 12 }}>No records match the filter criteria</div>
               ) : filteredHareketler.map((h, i) => {
                 const ekUcret = (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
                 return (
-                  <div key={i} className="table-row" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.7fr 0.9fr 0.8fr 0.9fr", gap: 6, padding: "11px 16px", alignItems: "center" }}
+                  <div key={i} className="table-row" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.6fr 0.6fr 0.8fr 0.8fr", gap: 6, padding: "11px 16px", alignItems: "center" }}
                     onClick={() => { const c = containers.find(x => x.containerId === h.containerId || x.containerNo === h.containerNo); if (c) { setSelectedContainer(c); setActiveTab("detay"); } }}>
                     <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{h.tarih}</span>
                     <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#1d6abf", fontWeight: 700, cursor: "pointer" }}
@@ -1175,7 +1309,7 @@ export default function App({ currentUser, onLogout }) {
             <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 300, fontSize: 11, letterSpacing: 3, color: "#64748b", textTransform: "uppercase", marginBottom: 20 }}>
               Definitions / Chassis Management
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 20 }}>
               {[
                 { label: "Total Chassis", value: chassisWithDurum.length, color: "#1d6abf" },
                 { label: "Available", value: chassisWithDurum.filter(c => c.durum === "available").length, color: "#059669" },
@@ -1334,12 +1468,41 @@ export default function App({ currentUser, onLogout }) {
                 ))}
               </div>
               {newHareket.yukDurumu === "chassis-only" && (
-                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={newHareket.yukNotu} onChange={e => setNewHareket(p => ({ ...p, yukNotu: e.target.value }))} />
+                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={newHareket.yukNotu} onChange={e => setNewHareket(p => ({ ...p, yukNotu: e.target.value }))} style={{ marginTop: 8 }} />
               )}
+              {/* KG — mandatory, label changes by load status */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
+                  {newHareket.yukDurumu === "loaded" ? "📦 Cargo Weight (KG)" : newHareket.yukDurumu === "empty" ? "⬜ Tare Weight (KG)" : "🚛 Chassis Weight (KG)"}
+                  {" "}<span style={{ color: "#dc2626" }}>*</span>
+                </div>
+                <input type="number" className="input" min="0"
+                  placeholder={newHareket.yukDurumu === "loaded" ? "e.g. 24000 (cargo + container)" : newHareket.yukDurumu === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
+                  value={newHareket.kg}
+                  onChange={e => { setNewHareket(p => ({ ...p, kg: e.target.value })); setKgError(""); }}
+                  style={{ textAlign: "right", borderColor: kgError ? "#dc2626" : undefined }} />
+                {kgError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kgError}</div>}
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
+                  {newHareket.yukDurumu === "loaded" ? "Total weight including cargo and container" : newHareket.yukDurumu === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
+                </div>
+              </div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Location / Route</div>
-              <input className="input" placeholder="Start → Destination" value={newHareket.konum} onChange={e => setNewHareket(p => ({ ...p, konum: e.target.value }))} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input" placeholder="Start → Destination" value={newHareket.konum}
+                  onChange={e => { setNewHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); }} />
+                <button type="button" className="btn btn-primary" style={{ whiteSpace: "nowrap", fontSize: 10, padding: "8px 12px", flexShrink: 0 }}
+                  onClick={() => calculateKm(newHareket.konum, (km) => setNewHareket(p => ({ ...p, km })))}
+                  disabled={kmLoading || !newHareket.konum.includes("→")}
+                  title="Auto-calculate KM between two points">
+                  {kmLoading ? "⏳" : "📍 Calculate KM"}
+                </button>
+              </div>
+              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kmError}</div>}
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+                Enter as "Start → Destination" then click Calculate KM
+              </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[["Reference", "referans", "Ref. no"], ["Note", "aciklama", "Note"]].map(([label, key, ph]) => (
@@ -1349,9 +1512,45 @@ export default function App({ currentUser, onLogout }) {
                 </div>
               ))}
               <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>KM</div>
-                <input type="number" className="input" placeholder="120" min="0" value={newHareket.km} onChange={e => setNewHareket(p => ({ ...p, km: e.target.value }))} style={{ textAlign: "right" }} />
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
+                  KM {kmLoading && <span style={{ color: "#3b82f6" }}>calculating...</span>}
+                </div>
+                <input type="number" className="input" placeholder="120 or auto-calculate ↑" min="0" value={newHareket.km}
+                  onChange={e => setNewHareket(p => ({ ...p, km: e.target.value }))}
+                  style={{ textAlign: "right", borderColor: kmLoading ? "#93c5fd" : undefined }} />
               </div>
+            </div>
+            {/* EURO NORM + CO2 PREVIEW */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
+                🌍 Vehicle Standard (Euro Norm)
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(EMISSION_FACTORS).map(([key, ef]) => (
+                  <button key={key} type="button"
+                    onClick={() => setNewHareket(p => ({ ...p, euronorm: key }))}
+                    style={{ padding: "6px 10px", borderRadius: 3, border: `2px solid ${newHareket.euronorm === key ? ef.color : "#e2e8f0"}`, background: newHareket.euronorm === key ? ef.bg : "#fff", color: newHareket.euronorm === key ? ef.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    {ef.label}
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const co2 = calcCO2(newHareket.km, newHareket.kg || selectedContainer?.kg, newHareket.euronorm);
+                const ef = EMISSION_FACTORS[newHareket.euronorm] || EMISSION_FACTORS.euro6;
+                return co2 ? (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, background: ef.bg, border: `1px solid ${ef.border}`, borderRadius: 4, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 16 }}>🌿</span>
+                    <div>
+                      <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 14, color: ef.color }}>{co2} kg CO₂</span>
+                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginLeft: 8 }}>estimated for this route</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 6, fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#cbd5e1" }}>
+                    Enter KM + container weight (KG) to see CO₂ estimate
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Date</div>
