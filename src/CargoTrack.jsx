@@ -65,6 +65,48 @@ const gunFarki = (baslangic, bitis) => {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+const formatSuggestion = (item) => {
+  const a = item.address || {};
+  const parts = [
+    a.road || a.neighbourhood || a.suburb,
+    a.city || a.town || a.village || a.county,
+    a.state,
+    a.country_code?.toUpperCase(),
+  ].filter(Boolean);
+  return parts.join(", ");
+};
+
+const SuggestInput = ({ value, onChange, onSelect, field, placeholder, borderColor, suggestions, sugLoading, activeSug, setActiveSug, setSuggestions, fetchSuggestions }) => (
+  <div style={{ position: "relative" }}>
+    <input className="input" placeholder={placeholder} value={value}
+      onChange={e => { onChange(e.target.value); fetchSuggestions(e.target.value, field); setActiveSug(field); }}
+      onFocus={() => { if (suggestions[field]?.length > 0) setActiveSug(field); }}
+      onBlur={() => setTimeout(() => setActiveSug(null), 150)}
+      style={{ borderColor, paddingRight: sugLoading[field] ? 32 : undefined }} />
+    {sugLoading[field] && (
+      <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#94a3b8" }}>⏳</div>
+    )}
+    {activeSug === field && suggestions[field]?.length > 0 && (
+      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 999, maxHeight: 220, overflowY: "auto" }}>
+        {suggestions[field].map((item, i) => (
+          <div key={i}
+            onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
+            style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", transition: "background 0.1s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+            onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#1e293b", fontWeight: 500 }}>
+              {(() => { const a = item.address || {}; return a.road || a.neighbourhood || a.suburb || a.city || a.town || a.village || item.display_name.split(",")[0]; })()}
+            </div>
+            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
+              {formatSuggestion(item)}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
 export default function App({ currentUser, onLogout }) {
   const [containers, setContainers] = useState([]);
   const [chassisList, setChassisList] = useState([]);
@@ -447,52 +489,7 @@ export default function App({ currentUser, onLogout }) {
     setSugLoading(p => ({ ...p, [field]: false }));
   };
 
-  const formatSuggestion = (item) => {
-    const a = item.address || {};
-    const parts = [
-      a.road || a.neighbourhood || a.suburb,
-      a.city || a.town || a.village || a.county,
-      a.state,
-      a.country_code?.toUpperCase(),
-    ].filter(Boolean);
-    return parts.join(", ");
-  };
-
-  const SuggestInput = ({ value, onChange, onSelect, field, placeholder, borderColor }) => (
-    <div style={{ position: "relative" }}>
-      <input className="input" placeholder={placeholder} value={value}
-        onChange={e => { onChange(e.target.value); fetchSuggestions(e.target.value, field); setActiveSug(field); }}
-        onFocus={() => { if (suggestions[field]?.length > 0) setActiveSug(field); }}
-        onBlur={() => setTimeout(() => setActiveSug(null), 200)}
-        style={{ borderColor, paddingRight: sugLoading[field] ? 32 : undefined }} />
-      {sugLoading[field] && (
-        <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#94a3b8" }}>⏳</div>
-      )}
-      {activeSug === field && suggestions[field]?.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 999, maxHeight: 220, overflowY: "auto" }}>
-          {suggestions[field].map((item, i) => (
-            <div key={i}
-              onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
-              style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", transition: "background 0.1s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
-              onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#1e293b", fontWeight: 500 }}>
-                {(() => {
-                  const a = item.address || {};
-                  return a.road || a.neighbourhood || a.suburb || a.city || a.town || a.village || item.display_name.split(",")[0];
-                })()}
-              </div>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
-                {formatSuggestion(item)}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-    const downloadCSV = (rows, headers, filename) => {
+  const downloadCSV = (rows, headers, filename) => {
     const bom = "\uFEFF";
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
@@ -1858,6 +1855,7 @@ export default function App({ currentUser, onLogout }) {
                 <div>
                   <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>📍 Departure</div>
                   <SuggestInput
+                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
                     value={editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim() || ""}
                     field="editFrom"
                     placeholder="City, address or postcode"
@@ -1876,6 +1874,7 @@ export default function App({ currentUser, onLogout }) {
                 <div>
                   <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>🏁 Destination</div>
                   <SuggestInput
+                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
                     value={editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim() || ""}
                     field="editTo"
                     placeholder="City, address or postcode"
