@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { supabase, isConfigured } from "./supabase.js";
 
 // Data is loaded from Supabase on mount
@@ -138,6 +138,7 @@ export default function App({ currentUser, onLogout }) {
   const [suggestions, setSuggestions] = useState({ addFrom: [], addTo: [], editFrom: [], editTo: [] });
   const [sugLoading, setSugLoading] = useState({ addFrom: false, addTo: false, editFrom: false, editTo: false });
   const [activeSug, setActiveSug] = useState(null); // "addFrom" | "addTo" | "editFrom" | "editTo"
+  const debounceRef = useRef({});
   const [addErrors, setAddErrors] = useState({});
   const [editErrors, setEditErrors] = useState({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -473,21 +474,24 @@ export default function App({ currentUser, onLogout }) {
     setKmLoading(false);
   };
 
-  const fetchSuggestions = async (query, field) => {
+  const fetchSuggestions = useCallback((query, field) => {
     if (!query || query.length < 2) { setSuggestions(p => ({ ...p, [field]: [] })); return; }
-    setSugLoading(p => ({ ...p, [field]: true }));
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`,
-        { headers: { "Accept-Language": "en" } }
-      );
-      const data = await res.json();
-      setSuggestions(p => ({ ...p, [field]: data || [] }));
-    } catch {
-      setSuggestions(p => ({ ...p, [field]: [] }));
-    }
-    setSugLoading(p => ({ ...p, [field]: false }));
-  };
+    if (debounceRef.current[field]) clearTimeout(debounceRef.current[field]);
+    debounceRef.current[field] = setTimeout(async () => {
+      setSugLoading(p => ({ ...p, [field]: true }));
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`,
+          { headers: { "Accept-Language": "en", "User-Agent": "CargoTrack/1.0" } }
+        );
+        const data = await res.json();
+        setSuggestions(p => ({ ...p, [field]: data || [] }));
+      } catch {
+        setSuggestions(p => ({ ...p, [field]: [] }));
+      }
+      setSugLoading(p => ({ ...p, [field]: false }));
+    }, 400);
+  }, []);
 
   const downloadCSV = (rows, headers, filename) => {
     const bom = "\uFEFF";
@@ -1556,23 +1560,51 @@ export default function App({ currentUser, onLogout }) {
               </div>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Location / Route</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input className="input" placeholder="Start → Destination" value={newHareket.konum}
-                  onChange={e => { setNewHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); setAddErrors(p => ({ ...p, konum: "" })); }}
-                  style={{ borderColor: addErrors.konum ? "#dc2626" : undefined }} />
-                <button type="button" className="btn btn-primary" style={{ whiteSpace: "nowrap", fontSize: 10, padding: "8px 12px", flexShrink: 0 }}
-                  onClick={() => calculateKm(newHareket.konum, (km) => setNewHareket(p => ({ ...p, km })))}
-                  disabled={kmLoading || !newHareket.konum.includes("→")}
-                  title="Auto-calculate KM between two points">
-                  {kmLoading ? "⏳" : "📍 Calculate KM"}
-                </button>
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: addErrors.konum ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
+                Location / Route{addErrors.konum && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {addErrors.konum}</span>}
               </div>
-              {addErrors.konum && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {addErrors.konum}</div>}
-              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kmError}</div>}
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
-                Enter as "Start → Destination" then click Calculate KM
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>📍 Departure</div>
+                  <SuggestInput
+                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                    value={newHareket.konumFrom}
+                    field="addFrom"
+                    placeholder="City, street or postcode"
+                    borderColor={addErrors.konum ? "#dc2626" : undefined}
+                    onChange={v => {
+                      setNewHareket(p => ({ ...p, konumFrom: v, konum: v && p.konumTo ? v + " → " + p.konumTo : v || p.konumTo || "" }));
+                      setAddErrors(p => ({ ...p, konum: "" }));
+                    }}
+                    onSelect={(display, formatted) => {
+                      setNewHareket(p => ({ ...p, konumFrom: formatted, konum: formatted && p.konumTo ? formatted + " → " + p.konumTo : formatted || p.konumTo || "" }));
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>🏁 Destination</div>
+                  <SuggestInput
+                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                    value={newHareket.konumTo}
+                    field="addTo"
+                    placeholder="City, street or postcode"
+                    borderColor={addErrors.konum ? "#dc2626" : undefined}
+                    onChange={v => {
+                      setNewHareket(p => ({ ...p, konumTo: v, konum: p.konumFrom && v ? p.konumFrom + " → " + v : p.konumFrom || v || "" }));
+                      setAddErrors(p => ({ ...p, konum: "" }));
+                    }}
+                    onSelect={(display, formatted) => {
+                      setNewHareket(p => ({ ...p, konumTo: formatted, konum: p.konumFrom && formatted ? p.konumFrom + " → " + formatted : p.konumFrom || formatted || "" }));
+                    }}
+                  />
+                </div>
               </div>
+              <button type="button" className="btn btn-primary" style={{ width: "100%", fontSize: 10, padding: "8px" }}
+                onClick={() => calculateKm(newHareket.konumFrom, newHareket.konumTo, (km) => setNewHareket(p => ({ ...p, km })))}
+                disabled={kmLoading || !newHareket.konumFrom || !newHareket.konumTo}>
+                {kmLoading ? "⏳ Calculating..." : "📍 Calculate KM Automatically"}
+              </button>
+              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 6 }}>⚠ {kmError}</div>}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[["Reference", "referans", "Ref. no"], ["Note", "aciklama", "Note"]].map(([label, key, ph]) => (
