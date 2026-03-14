@@ -76,30 +76,25 @@ const formatSuggestion = (item) => {
   return parts.join(", ");
 };
 
-const SuggestInput = ({ value, onChange, onSelect, field, placeholder, borderColor, suggestions, sugLoading, activeSug, setActiveSug, setSuggestions, fetchSuggestions }) => (
-  <div style={{ position: "relative" }}>
-    <input className="input" placeholder={placeholder} value={value}
+
+const SuggestInput = ({ value, onChange, onSelect, field, placeholder, hasError, suggestions, sugLoading, activeSug, setActiveSug, setSuggestions, fetchSuggestions }) => (
+  <div className="relative">
+    <input
+      className={`w-full border rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-slate-300 ${hasError ? "border-red-400" : "border-slate-200"}`}
+      placeholder={placeholder} value={value}
       onChange={e => { onChange(e.target.value); fetchSuggestions(e.target.value, field); setActiveSug(field); }}
       onFocus={() => { if (suggestions[field]?.length > 0) setActiveSug(field); }}
-      onBlur={() => setTimeout(() => setActiveSug(null), 150)}
-      style={{ borderColor, paddingRight: sugLoading[field] ? 32 : undefined }} />
-    {sugLoading[field] && (
-      <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#94a3b8" }}>⏳</div>
-    )}
+      onBlur={() => setTimeout(() => setActiveSug(null), 150)} />
+    {sugLoading[field] && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">⏳</div>}
     {activeSug === field && suggestions[field]?.length > 0 && (
-      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 999, maxHeight: 220, overflowY: "auto" }}>
+      <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-[999] max-h-56 overflow-y-auto mt-1">
         {suggestions[field].map((item, i) => (
-          <div key={i}
-            onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
-            style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", transition: "background 0.1s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#1e293b", fontWeight: 500 }}>
+          <div key={i} onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
+            className="px-4 py-3 cursor-pointer hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
+            <div className="text-sm font-medium text-slate-700">
               {(() => { const a = item.address || {}; return a.road || a.neighbourhood || a.suburb || a.city || a.town || a.village || item.display_name.split(",")[0]; })()}
             </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
-              {formatSuggestion(item)}
-            </div>
+            <div className="text-xs text-slate-400 mt-0.5">{formatSuggestion(item)}</div>
           </div>
         ))}
       </div>
@@ -530,7 +525,7 @@ export default function App({ currentUser, onLogout }) {
 
   const exportPDF = (type) => {
     const w = window.open("", "_blank");
-    const style = `<style>body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:20px}h2{font-size:15px;color:#1d6abf;margin-bottom:4px}p{color:#64748b;font-size:10px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:1px;padding:7px 10px;border:1px solid #e2e8f0;text-align:left}td{padding:7px 10px;border:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}.badge{padding:2px 8px;border-radius:2px;font-weight:700;font-size:9px}.aktif{background:#d1fae5;color:#059669}.kapali{background:#f1f5f9;color:#94a3b8}@media print{body{padding:0}}</style>`;
+    const style = `<style>body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:20px}h2{font-size:15px;color:#1d6abf;margin-bottom:4px}p{color:#64748b;font-size:10px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:1px;padding:7px 10px;border:1px solid #e2e8f0;text-align:left}td{padding:7px 10px;border:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}.badge{padding:2px 8px;border-radius:2px;font-weight:700;font-size:9px}.aktif{background:#d1fae5;color:#059669}.kapali{background:#f1f5f9;color:#94a3b8}@media print{body{padding:0}</style>`;
     if (type === "hareketler") {
       const rows = filteredHareketler.map(h => {
         const ek = (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
@@ -684,1073 +679,958 @@ export default function App({ currentUser, onLogout }) {
     setShowKapatModal(false);
     setActiveTab("liste");
   };
-
-  // Supabase henüz yapılandırılmamışsa kurulum ekranı göster
+  // Supabase config check
   if (!isConfigured) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Roboto', sans-serif", padding: 24 }}>
-        <div style={{ maxWidth: 540, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "40px", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⬡</div>
-          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 4, color: "#fff", marginBottom: 4 }}>CARGO<span style={{ color: "#3b82f6" }}>TRACK</span></div>
-          <div style={{ fontSize: 10, color: "#64748b", letterSpacing: 3, marginBottom: 32, textTransform: "uppercase" }}>Container Planning System</div>
-          <div style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: 8, padding: "20px", marginBottom: 28, textAlign: "left" }}>
-            <div style={{ color: "#fbbf24", fontWeight: 700, fontSize: 13, marginBottom: 12 }}>&#9888; Supabase Yapilandirmasi Gerekli</div>
-            <div style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.8 }}>
-              src/supabase.js dosyasini acin ve su iki degeri doldurun:
-              <div style={{ marginTop: 12, background: "rgba(0,0,0,0.3)", borderRadius: 6, padding: "12px 14px", fontFamily: "monospace", fontSize: 11, color: "#6ee7b7" }}>
-                <div>{"const SUPABASE_URL = "}<span style={{ color: "#fcd34d" }}>{"'https://xxxx.supabase.co'"}</span>{";"}</div>
-                <div style={{ marginTop: 4 }}>{"const SUPABASE_ANON_KEY = "}<span style={{ color: "#fcd34d" }}>{"'eyJhbGci...'"}</span>{";"}</div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-10 text-center">
+          <div className="text-5xl mb-4">⬡</div>
+          <div className="text-white font-black text-3xl tracking-widest mb-1">CARGO<span className="text-blue-400">TRACK</span></div>
+          <div className="text-slate-500 text-xs tracking-widest mb-8 uppercase">Container Planning System</div>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-5 mb-7 text-left">
+            <div className="text-amber-400 font-bold text-sm mb-3">⚠ Supabase Configuration Required</div>
+            <div className="text-slate-400 text-xs leading-relaxed">
+              Open <code className="bg-white/10 px-1.5 py-0.5 rounded text-slate-200">src/supabase.js</code> and fill in:
+              <div className="mt-3 bg-black/30 rounded-lg p-3 font-mono text-xs text-emerald-400">
+                <div>{"const SUPABASE_URL = "}<span className="text-amber-300">"https://xxxx.supabase.co"</span>{";"}</div>
+                <div className="mt-1">{"const SUPABASE_ANON_KEY = "}<span className="text-amber-300">"eyJhbGci..."</span>{";"}</div>
               </div>
-              <div style={{ marginTop: 12, color: "#64748b", fontSize: 11 }}>
-                Bu degerleri supabase.com - Settings - API bolumunden alabilirsiniz. Detayli rehber icin SUPABASE-SETUP.md dosyasina bakin.
-              </div>
+              <div className="mt-3 text-slate-500 text-xs">Get these from <strong className="text-slate-400">supabase.com → Settings → API</strong>. See SUPABASE-SETUP.md for the full guide.</div>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{ background: "#1d6abf", color: "#fff", borderRadius: 6, padding: "11px", fontWeight: 700, fontSize: 12, letterSpacing: 1, textDecoration: "none", textTransform: "uppercase", display: "block" }}>
-              1. Supabase Ac
-            </a>
-            <a href="https://github.com" target="_blank" rel="noreferrer" style={{ background: "rgba(255,255,255,0.08)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "11px", fontWeight: 700, fontSize: 12, letterSpacing: 1, textDecoration: "none", textTransform: "uppercase", display: "block" }}>
-              2. Kodu Guncelle
-            </a>
+          <div className="grid grid-cols-2 gap-3">
+            <a href="https://supabase.com" target="_blank" rel="noreferrer" className="bg-blue-600 text-white text-xs font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors block">1. Open Supabase →</a>
+            <a href="https://github.com" target="_blank" rel="noreferrer" className="bg-white/8 text-slate-400 border border-white/10 text-xs font-bold py-3 rounded-lg hover:bg-white/12 transition-colors block">2. Update Code</a>
           </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div style={{ fontFamily: "'Roboto', sans-serif", background: "#f0f4f8", minHeight: "100vh", color: "#1e293b", boxShadow: "none" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #f0f4f8; }
-        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #ffffff; } ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 3px; }
-        .nav-btn { background: none; border: none; cursor: pointer; padding: 10px 20px; font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; transition: all 0.2s; }
-        .nav-btn.active { background: #dbeafe; color: #1d6abf; border-bottom: 2px solid #1d6abf; }
-        .nav-btn:not(.active) { color: #94a3b8; }
-        .nav-btn:not(.active):hover { color: #64748b; }
-        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .stat-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .btn { cursor: pointer; font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; padding: 9px 18px; border-radius: 3px; border: none; transition: all 0.2s; }
-        .btn-primary { background: #dbeafe; color: #1d6abf; border: 1px solid #93c5fd; }
-        .btn-primary:hover { background: #bfdbfe; }
-        .btn-danger { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-        .btn-danger:hover { background: #fecaca; }
-        .btn-success { background: #d1fae5; color: #059669; border: 1px solid #6ee7b7; }
-        .btn-success:hover { background: #a7f3d0; }
-        .btn-ghost { background: none; color: #64748b; border: 1px solid #d1d5db; }
-        .btn-ghost:hover { background: #f1f5f9; color: #374151; }
-        .input { background: #ffffff; border: 1px solid #d1d9e0; color: #1e293b; padding: 9px 12px; border-radius: 3px; font-family: 'Roboto', sans-serif; font-size: 12px; width: 100%; outline: none; transition: border 0.2s; }
-        .input:focus { border-color: #3b82f6; }
-        .input::placeholder { color: #cbd5e1; }
-        .badge { display: inline-block; padding: 3px 10px; border-radius: 2px; font-family: 'Roboto', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-        .badge-active { background: #d1fae5; color: #059669; border: 1px solid #6ee7b7; }
-        .badge-closed { background: #f1f5f9; color: #94a3b8; border: 1px solid #d1d5db; }
-        .table-row { border-bottom: 1px solid #e2e8f0; transition: background 0.15s; cursor: pointer; }
-        .table-row:hover { background: #f8fafc; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: flex-start; justify-content: center; z-index: 100; overflow-y: auto; padding: 20px 0; }
-        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 28px; width: 480px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,0.12); margin: auto; }
-        .hareket-row { border-left: 2px solid #3b82f6; padding: 10px 14px; margin-bottom: 8px; background: #f8fafc; border-radius: 0 3px 3px 0; }
-        .hareket-row:last-child { border-left-color: #059669; }
-        .detail-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; }
-        .mobile-only { display: none; }
-        .desktop-only { display: flex; }
-        @media (max-width: 768px) {
-          .mobile-only { display: flex !important; }
-          .desktop-only { display: none !important; }
-          .modal { width: 100% !important; max-width: 100vw !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; padding: 20px 16px !important; }
-          .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
-          .card { padding: 14px !important; }
-          .stat-card { padding: 14px 16px !important; }
-          .btn { font-size: 11px !important; padding: 8px 12px !important; }
-        }
-        @media (max-width: 480px) {
-          .modal { border-radius: 0 !important; }
-        }
-      `}</style>
+  const NAV = [
+    { key: "dashboard", icon: "⊞", label: "Dashboard" },
+    { key: "forecast",  icon: "◈", label: "Forecast" },
+    { key: "liste",     icon: "▦", label: "Containers" },
+    { key: "hareketler",icon: "⊳", label: "Movements" },
+    { key: "ayarlar",   icon: "⊙", label: "Settings" },
+  ];
 
-      {/* HEADER */}
-      <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "0 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ padding: "12px 0" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase" }}>
-              ⬡ CARGO<span style={{ color: "#1e293b" }}>TRACK</span>
-            </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 8, color: "#64748b", letterSpacing: 2 }}>CONTAINER PLANNING SYSTEM</div>
-          </div>
-          {/* Desktop Nav */}
-          <nav className="desktop-only" style={{ gap: 2, marginLeft: 8 }}>
-            {[["dashboard", "🏠 Dashboard"], ["forecast", "📋 Forecast"], ["liste", "📦 Containers"], ["hareketler", "🚛 Movements"], ["ayarlar", "⚙️ Settings"]].map(([key, label]) => (
-              <button key={key} className={`nav-btn ${activeTab === key ? "active" : ""}`} onClick={() => { setActiveTab(key); setSelectedContainer(null); }}>{label}</button>
-            ))}
-          </nav>
-          {/* Mobile Hamburger */}
-          <button className="mobile-only" onClick={() => setMobileMenuOpen(p => !p)}
-            style={{ marginLeft: "auto", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, padding: "8px 10px", cursor: "pointer", fontSize: 18, color: "#64748b" }}>
-            {mobileMenuOpen ? "✕" : "☰"}
-          </button>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {currentUser && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, color: "#1e293b" }}>{currentUser.name}</div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", letterSpacing: 1, textTransform: "uppercase" }}>{currentUser.role}</div>
-                </div>
-                <button
-                  onClick={onLogout}
-                  style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 3, padding: "6px 12px", cursor: "pointer", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, color: "#64748b", letterSpacing: 1, textTransform: "uppercase" }}
-                  title="Sign out"
-                >
-                  Sign Out
-                </button>
-              </div>
-            )}
-            <button className="btn btn-primary" onClick={() => setShowAddContainer(true)}>+ New Container</button>
+  const PAGE_TITLE = { dashboard: "Dashboard", forecast: "Forecast", liste: "Containers", hareketler: "Movements", ayarlar: "Settings", detay: selectedContainer ? selectedContainer.containerNo : "Detail" };
+
+  const INP = "w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-slate-300";
+  const LBL = "block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5";
+  const BTN_P = "bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-blue-700 active:scale-95 transition-all";
+  const BTN_G = "border border-slate-200 text-slate-600 bg-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-50 transition-colors";
+  const BTN_D = "bg-red-50 text-red-600 border border-red-200 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-red-100 transition-colors";
+  const BTN_S = "bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-emerald-100 transition-colors";
+
+  return (
+    <div className="flex h-screen bg-slate-100 overflow-hidden">
+
+      {/* ── SIDEBAR ──────────────────────────────────────── */}
+      <aside className={`fixed inset-y-0 left-0 w-64 bg-[#1e293b] flex flex-col z-40 transition-transform duration-300 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-700/50">
+          <span className="text-blue-400 text-2xl leading-none">⬡</span>
+          <div>
+            <div className="text-white font-black tracking-widest text-sm uppercase">CARGO<span className="text-blue-400">TRACK</span></div>
+            <div className="text-slate-500 text-[9px] tracking-widest uppercase mt-0.5">Container Planning</div>
           </div>
         </div>
-      </div>
 
-      {/* MOBILE NAV DROPDOWN */}
-      {mobileMenuOpen && (
-        <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "8px 16px" }}>
-          {[["dashboard", "🏠 Dashboard"], ["forecast", "📋 Forecast"], ["liste", "📦 Containers"], ["hareketler", "🚛 Movements"], ["ayarlar", "⚙️ Settings"]].map(([key, label]) => (
-            <button key={key}
-              onClick={() => { setActiveTab(key); setSelectedContainer(null); setMobileMenuOpen(false); }}
-              style={{ display: "block", width: "100%", textAlign: "left", background: activeTab === key ? "#dbeafe" : "none", border: "none", borderRadius: 4, padding: "12px 14px", fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 1, color: activeTab === key ? "#1d6abf" : "#64748b", cursor: "pointer", marginBottom: 2 }}>
-              {label}
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {NAV.map(n => (
+            <button key={n.key}
+              onClick={() => { setActiveTab(n.key); setSelectedContainer(null); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${activeTab === n.key || (n.key === "detay" && activeTab === "detay") ? "bg-blue-600 text-white shadow-md shadow-blue-900/30" : "text-slate-400 hover:text-white hover:bg-slate-700/50"}`}>
+              <span className="text-base w-5 text-center">{n.icon}</span>
+              <span>{n.label}</span>
+              {(n.key === "forecast" && forecastList.length > 0) && <span className="ml-auto bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{forecastList.length}</span>}
             </button>
           ))}
-          {currentUser && (
-            <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#475569" }}>{currentUser.name} <span style={{ color: "#94a3b8", fontSize: 10 }}>({currentUser.role})</span></div>
-              <button onClick={onLogout} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 3, padding: "5px 10px", cursor: "pointer", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, color: "#64748b" }}>Sign Out</button>
+        </nav>
+
+        {/* User */}
+        {currentUser && (
+          <div className="px-4 py-4 border-t border-slate-700/50">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                {currentUser.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-xs font-semibold truncate">{currentUser.name}</div>
+                <div className="text-slate-500 text-[10px] capitalize">{currentUser.role}</div>
+              </div>
+              <button onClick={onLogout} title="Sign Out"
+                className="text-slate-500 hover:text-white text-sm transition-colors">→</button>
+            </div>
+          </div>
+        )}
+      </aside>
+
+      {/* Mobile overlay */}
+      {mobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setMobileMenuOpen(false)} />}
+
+      {/* ── MAIN ─────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col md:ml-64 min-h-screen overflow-hidden">
+
+        {/* Header */}
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-20 flex-shrink-0">
+          <div className="flex items-center justify-between px-4 md:px-6 h-14">
+            {/* Mobile hamburger */}
+            <button className="md:hidden text-slate-500 hover:text-slate-800 text-xl mr-3" onClick={() => setMobileMenuOpen(true)}>☰</button>
+            {/* Page title */}
+            <div>
+              <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{PAGE_TITLE[activeTab] || "Detail"}</h1>
+            </div>
+            {/* Actions */}
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => setShowAddContainer(true)}
+                className="bg-blue-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5">
+                <span className="text-base leading-none">+</span>
+                <span className="hidden sm:inline">New Container</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+
+          {/* DB LOADING */}
+          {dbLoading && (
+            <div className="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center">
+              <div className="text-5xl mb-4 animate-spin text-blue-500">⬡</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading data...</div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* CONTENT */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 16px" }}>
-
-        {/* DB LOADING OVERLAY */}
-        {dbLoading && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-            <div style={{ fontSize: 40, marginBottom: 16, animation: "spin 1.2s linear infinite" }}>⬡</div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase" }}>Loading data...</div>
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-
-        {/* DB ERROR BANNER */}
-        {dbError && (
-          <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 4, padding: "14px 20px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>⚠️</span>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, color: "#dc2626", fontWeight: 700 }}>Database Connection Error</div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#b91c1c", marginTop: 2 }}>{dbError}</div>
-              </div>
-            </div>
-            <button onClick={fetchAll} style={{ background: "#dc2626", border: "none", borderRadius: 3, padding: "7px 14px", color: "#fff", fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 1 }}>Retry</button>
-          </div>
-        )}
-
-      {/* SUCCESS BANNER */}
-        {successMessage && (
-          <div style={{ background: "#d1fae5", border: "1px solid #6ee7b7", borderRadius: 4, padding: "12px 20px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>✅</span>
-              <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, color: "#059669", fontWeight: 600 }}>{successMessage}</span>
-            </div>
-            <button onClick={() => setSuccessMessage("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#059669", fontSize: 16, fontWeight: 700 }}>✕</button>
-          </div>
-        )}
-
-        {/* DASHBOARD */}
-        {activeTab === "dashboard" && (
-          <div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 300, fontSize: 11, letterSpacing: 3, color: "#64748b", textTransform: "uppercase", marginBottom: 20 }}>
-              SİSTEM DURUMU — {new Date().toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
-              {[
-                { label: "Aktif Container", value: aktifler.length, color: "#1d6abf", sub: "Şu an sahada" },
-                { label: "Completed", value: kapalilar.length, color: "#059669", sub: "Bu ay" },
-                { label: "Total Days", value: aktifler.reduce((s, c) => s + gunFarki(c.limanCikis, null), 0), color: "#d97706", sub: "Sum of active durations" },
-                { label: "Beklenen Container", value: forecastList.length, color: "#7c3aed", sub: "Forecast listesi" },
-              ].map(({ label, value, color, sub }) => (
-                <div key={label} className="stat-card">
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 44, color, lineHeight: 1 }}>{value}</div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b", marginTop: 6 }}>{sub}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* CARBON WIDGET */}
-            {co2AllTotal() > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
-                {[
-                  { label: "🌍 Total CO₂ (Fleet)", value: `${(co2AllTotal() / 1000).toFixed(2)} t`, sub: `${co2AllTotal().toFixed(1)} kg CO₂`, color: "#059669" },
-                  { label: "⚡ Active Ops CO₂",    value: `${(co2AllActive() / 1000).toFixed(2)} t`, sub: `${aktifler.length} active containers`, color: "#d97706" },
-                  { label: "🌳 Tree Equivalent",   value: `${Math.round(co2AllTotal() / 21)}`, sub: "trees/year to offset", color: "#047857" },
-                  { label: "💶 Carbon Cost",        value: `€${Math.round(co2AllTotal() / 1000 * 18)}`, sub: "~€18/ton CO₂ estimate", color: "#7c3aed" },
-                ].map(({ label, value, sub, color }) => (
-                  <div key={label} className="stat-card" style={{ borderLeft: `3px solid ${color}` }}>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 28, color, lineHeight: 1 }}>{value}</div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="card">
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase", marginBottom: 16 }}>
-                Aktif Containerlar
-              </div>
-              {aktifler.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#64748b", padding: "30px 0", fontFamily: "'Roboto', sans-serif", fontSize: 12 }}>Aktif container bulunmuyor</div>
-              ) : (
+          {/* DB ERROR */}
+          {dbError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-red-500 text-lg">⚠</span>
                 <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 0.8fr 0.8fr auto", gap: 8, padding: "6px 12px", fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0", marginBottom: 4 }}>
-                    <span>Container No</span><span>Chassis</span><span>Customer</span><span>Departure</span><span>Days</span><span>Last Location</span><span></span>
-                  </div>
-                  {aktifler.map(c => (
-                    <div key={c.id} className="table-row" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 0.8fr 0.8fr auto", gap: 8, padding: "12px", alignItems: "center" }}
-                      onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#1d6abf" }}>{c.containerNo}</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{c.chassisNo}</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, fontWeight: 500 }}>{c.musteri}</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#94a3b8" }}>{c.limanCikis}</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 16, color: gunFarki(c.limanCikis) > 14 ? "#dc2626" : "#d97706" }}>
-                        {gunFarki(c.limanCikis)}
-                      </span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {c.hareketler[c.hareketler.length - 1]?.konum?.split("→").pop()?.trim() || "-"}
-                      </span>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 12px" }}
-                        onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {forecastList.length > 0 && (
-              <div className="card" style={{ marginTop: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase" }}>
-                    Upcoming Containers (Forecast)
-                  </div>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 12px" }} onClick={() => setActiveTab("forecast")}>View All →</button>
-                </div>
-                {[...forecastList].sort((a, b) => new Date(a.tahminiTarih) - new Date(b.tahminiTarih)).slice(0, 3).map(fc => {
-                  const gunKaldi = gunFarki(today(), fc.tahminiTarih);
-                  const gecti = new Date(fc.tahminiTarih) < new Date();
-                  const linked = containers.find(c => c.containerNo === fc.containerNo);
-                  return (
-                    <div key={fc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #e2e8f0" }}>
-                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                        <span
-                          style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#1d6abf", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
-                          onClick={() => { if (linked) { setSelectedContainer(linked); setActiveTab("detay"); } else { setActiveTab("forecast"); } }}
-                          title={linked ? "Go to container detail" : "Forecast sekmesine git"}>
-                          {fc.containerNo}
-                          {linked && <span style={{ fontSize: 9, marginLeft: 4, color: "#059669", fontWeight: 400 }}>↗</span>}
-                        </span>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, color: "#1e293b" }}>{fc.musteri}</span>
-                        {fc.liman && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{fc.liman}</span>}
-                      </div>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b" }}>{fc.tahminiTarih}</span>
-                        <span style={{
-                          fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 12, padding: "1px 8px", borderRadius: 2,
-                          background: gecti ? "#fee2e2" : gunKaldi <= 3 ? "#fef3c7" : "#dbeafe",
-                          color: gecti ? "#dc2626" : gunKaldi <= 3 ? "#d97706" : "#1d6abf",
-                        }}>
-                          {gecti ? `${Math.abs(gunKaldi)}g geçti` : gunKaldi === 0 ? "Today" : `${gunKaldi}g`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {forecastList.length === 0 && (
-              <div className="card" style={{ marginTop: 16, textAlign: "center", padding: "28px 20px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>
-                  Upcoming Containers (Forecast)
-                </div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 28, color: "#e2e8f0", marginBottom: 6 }}>📋</div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#cbd5e1" }}>No upcoming containers</div>
-                <button className="btn btn-ghost" style={{ marginTop: 12, fontSize: 10, padding: "5px 14px" }} onClick={() => setActiveTab("forecast")}>+ Add Forecast</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "forecast" && (
-          <div>
-            {/* FILTER BAR */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <div style={{ flex: "0 0 200px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Container No</div>
-                <input className="input" placeholder="Filter..." value={forecastFilter.containerNo}
-                  onChange={e => setForecastFilter(p => ({ ...p, containerNo: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 180px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Customer</div>
-                <input className="input" placeholder="Customer name..." value={forecastFilter.musteri}
-                  onChange={e => setForecastFilter(p => ({ ...p, musteri: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 140px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Est. Date From</div>
-                <input type="date" className="input" value={forecastFilter.tarihBas}
-                  onChange={e => setForecastFilter(p => ({ ...p, tarihBas: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 140px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Est. Date To</div>
-                <input type="date" className="input" value={forecastFilter.tarihBit}
-                  onChange={e => setForecastFilter(p => ({ ...p, tarihBit: e.target.value }))} />
-              </div>
-              {(forecastFilter.containerNo || forecastFilter.musteri || forecastFilter.tarihBas || forecastFilter.tarihBit) && (
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "7px 12px", alignSelf: "flex-end" }}
-                  onClick={() => setForecastFilter({ containerNo: "", musteri: "", tarihBas: "", tarihBit: "" })}>✕ Clear</button>
-              )}
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignSelf: "flex-end" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", alignSelf: "center", marginRight: 4 }}>
-                  {filteredForecast.length} records
-                </div>
-                <button className="btn btn-primary" style={{ fontSize: 11, padding: "7px 16px" }} onClick={() => setShowAddForecast(true)}>+ Add Forecast</button>
-              </div>
-            </div>
-            {filteredForecast.length === 0 ? (
-              <div className="card" style={{ textAlign: "center", padding: "60px 20px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 32, color: "#d1d5db", marginBottom: 8 }}>📋</div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#94a3b8" }}>
-                  {forecastList.length === 0 ? "No forecast records yet" : "No records match the filter criteria"}
+                  <div className="text-red-700 text-sm font-semibold">Database Connection Error</div>
+                  <div className="text-red-500 text-xs mt-0.5">{dbError}</div>
                 </div>
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {filteredForecast.map(fc => {
-                  const gunKaldi = gunFarki(today(), fc.tahminiTarih);
-                  const gecti = new Date(fc.tahminiTarih) < new Date();
-                  return (
-                    <div key={fc.id} className="card" style={{ padding: "16px 20px", borderLeft: `3px solid ${fc.onem === "high" ? "#dc2626" : fc.onem === "urgent" ? "#7c3aed" : "#3b82f6"}` }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.2fr 1fr 1fr 1fr auto", gap: 12, alignItems: "center" }}>
-                        <div>
-                          <div
-                            style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#1d6abf", fontWeight: 700, cursor: containers.some(c => c.containerNo === fc.containerNo) ? "pointer" : "default", textDecoration: containers.some(c => c.containerNo === fc.containerNo) ? "underline" : "none" }}
-                            onClick={() => { const c = containers.find(x => x.containerNo === fc.containerNo); if (c) { setSelectedContainer(c); setActiveTab("detay"); } }}
-                            title={containers.some(c => c.containerNo === fc.containerNo) ? "Go to container detail" : "Not yet in system"}>
-                            {fc.containerNo}
-                            {containers.some(c => c.containerNo === fc.containerNo) && <span style={{ fontSize: 9, marginLeft: 4, color: "#059669", fontWeight: 400 }}>↗ Detail</span>}
-                          </div>
-                          {fc.aciklama && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{fc.aciklama}</div>}
-                        </div>
-                        <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 14, fontWeight: 500, color: "#1e293b" }}>{fc.musteri}</div>
-                        <div>
-                          <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase" }}>Port</div>
-                          <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#475569" }}>{fc.liman || "—"}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase" }}>Est. Date</div>
-                          <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#475569" }}>{fc.tahminiTarih}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 1, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Time</div>
-                          <span style={{
-                            fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, padding: "2px 10px", borderRadius: 2,
-                            background: gecti ? "#fee2e2" : gunKaldi <= 3 ? "#fef3c7" : "#dbeafe",
-                            color: gecti ? "#dc2626" : gunKaldi <= 3 ? "#d97706" : "#1d6abf",
-                            border: `1px solid ${gecti ? "#fca5a5" : gunKaldi <= 3 ? "#fcd34d" : "#93c5fd"}`
-                          }}>
-                            {gecti ? `${Math.abs(gunKaldi)} days overdue` : gunKaldi === 0 ? "Today" : `${gunKaldi} days left`}
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button className="btn btn-success" style={{ fontSize: 10, padding: "5px 10px", whiteSpace: "nowrap" }}
-                            onClick={() => handleForecastToContainer(fc)}>→ Open Container</button>
-                          <button className="btn btn-ghost" style={{ fontSize: 10, padding: "5px 10px", color: "#dc2626", borderColor: "#fca5a5" }}
-                            onClick={() => handleDeleteForecast(fc.id, fc.containerNo)}>Delete</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "liste" && (
-          <div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
-              <input className="input" placeholder="Search container no, customer or chassis..." style={{ maxWidth: 340 }}
-                value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-              <div style={{ display: "flex", gap: 6 }}>
-                {[["all", "All"], ["active", "Active"], ["closed", "Closed"]].map(([val, label]) => (
-                  <button key={val} className={`btn ${filterDurum === val ? "btn-primary" : "btn-ghost"}`}
-                    style={{ fontSize: 11, padding: "7px 14px" }} onClick={() => setFilterDurum(val)}>{label}</button>
-                ))}
-              </div>
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                <button className="btn btn-primary" style={{ fontSize: 11, padding: "7px 16px" }}
-                  onClick={() => setShowAddContainer(true)}>+ Add Container</button>
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "6px 12px", color: "#059669", borderColor: "#6ee7b7" }}
-                  onClick={() => exportContainersCSV()}>⬇ Excel</button>
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "6px 12px", color: "#dc2626", borderColor: "#fca5a5" }}
-                  onClick={() => exportPDF("containers")}>🖨 PDF</button>
-              </div>
+              <button onClick={fetchAll} className="bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-red-700">Retry</button>
             </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.2fr 1fr 1fr 0.7fr 0.7fr auto", gap: 8, padding: "10px 16px", fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0" }}>
-                <span>Container No</span><span>Chassis</span><span>Customer</span><span>Departure</span><span>Return</span><span>Days</span><span>Status</span><span></span>
-              </div>
-              {filteredContainers.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#64748b", padding: "40px", fontFamily: "'Roboto', sans-serif", fontSize: 12 }}>Sonuç bulunamadı</div>
-              ) : filteredContainers.map(c => (
-                <div key={c.id} className="table-row" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.2fr 1fr 1fr 0.7fr 0.7fr auto", gap: 8, padding: "13px 16px", alignItems: "center" }}
-                  onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#1d6abf" }}>{c.containerNo}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{c.chassisNo}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 14, fontWeight: 500 }}>{c.musteri}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{c.limanCikis}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{c.limanGiris || "—"}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 15, color: c.durum === "active" ? "#d97706" : "#94a3b8" }}>
-                    {gunFarki(c.limanCikis, c.limanGiris)}
-                  </span>
-                  <span><span className={`badge badge-${c.durum}`}>{c.durum === "active" ? "Active" : "Closed"}</span></span>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 12px" }}
-                    onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === "hareketler" && (
-          <div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 300, fontSize: 11, letterSpacing: 3, color: "#64748b", textTransform: "uppercase", marginBottom: 16 }}>
-              All Movement Records
+          {/* SUCCESS BANNER */}
+          {successMessage && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3.5 mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-emerald-500 text-lg">✓</span>
+                <span className="text-emerald-700 text-sm font-medium">{successMessage}</span>
+              </div>
+              <button onClick={() => setSuccessMessage("")} className="text-emerald-500 hover:text-emerald-700 text-lg">×</button>
             </div>
+          )}
 
-            {/* FILTER BAR */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <div style={{ flex: "0 0 200px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Container No / Customer</div>
-                <input className="input" placeholder="Filter..." value={hareketFilter.containerNo}
-                  onChange={e => setHareketFilter(p => ({ ...p, containerNo: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 160px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Sürücü</div>
-                <input className="input" placeholder="Driver name..." value={hareketFilter.surucu}
-                  onChange={e => setHareketFilter(p => ({ ...p, surucu: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 140px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Start Date</div>
-                <input type="date" className="input" value={hareketFilter.tarihBas}
-                  onChange={e => setHareketFilter(p => ({ ...p, tarihBas: e.target.value }))} />
-              </div>
-              <div style={{ flex: "0 0 140px" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>End Date</div>
-                <input type="date" className="input" value={hareketFilter.tarihBit}
-                  onChange={e => setHareketFilter(p => ({ ...p, tarihBit: e.target.value }))} />
-              </div>
-              {(hareketFilter.containerNo || hareketFilter.surucu || hareketFilter.tarihBas || hareketFilter.tarihBit) && (
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "7px 12px", alignSelf: "flex-end" }}
-                  onClick={() => setHareketFilter({ containerNo: "", surucu: "", tarihBas: "", tarihBit: "" })}>✕ Clear</button>
-              )}
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignSelf: "flex-end" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", alignSelf: "center", marginRight: 4 }}>
-                  {filteredHareketler.length} records
-                </div>
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "6px 12px", color: "#059669", borderColor: "#6ee7b7" }}
-                  onClick={() => exportHareketlerCSV()}>⬇ Excel</button>
-                <button className="btn btn-ghost" style={{ fontSize: 10, padding: "6px 12px", color: "#dc2626", borderColor: "#fca5a5" }}
-                  onClick={() => exportPDF("hareketler")}>🖨 PDF</button>
-              </div>
-            </div>
-
-            <div className="card" style={{ padding: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.6fr 0.6fr 0.8fr 0.8fr", gap: 6, padding: "10px 16px", fontFamily: "'Roboto', sans-serif", fontSize: 9, letterSpacing: 1.5, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0" }}>
-                <span>Date</span><span>Container</span><span>Customer</span><span>Driver</span><span>Location / Route</span><span>KM</span><span>CO₂</span><span>Load</span><span>Surcharge</span>
-              </div>
-              {filteredHareketler.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#64748b", padding: "40px", fontFamily: "'Roboto', sans-serif", fontSize: 12 }}>No records match the filter criteria</div>
-              ) : filteredHareketler.map((h, i) => {
-                const ekUcret = (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
-                return (
-                  <div key={i} className="table-row" style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1fr 1.1fr 2fr 0.6fr 0.6fr 0.8fr 0.8fr", gap: 6, padding: "11px 16px", alignItems: "center" }}
-                    onClick={() => { const c = containers.find(x => x.containerId === h.containerId || x.containerNo === h.containerNo); if (c) { setSelectedContainer(c); setActiveTab("detay"); } }}>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{h.tarih}</span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#1d6abf", fontWeight: 700, cursor: "pointer" }}
-                      onClick={e => { e.stopPropagation(); const c = containers.find(x => x.containerNo === h.containerNo); if (c) { setSelectedContainer(c); setActiveTab("detay"); } }}>
-                      {h.containerNo}
-                    </span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#475569" }}>{h.musteri}</span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11 }}>{h.surucu}</span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b" }}>{h.konum}</span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 12, color: h.km ? "#d97706" : "#64748b" }}>
-                      {h.km ? `${Number(h.km).toLocaleString("en-US")}` : "—"}
-                    </span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#7c3aed" }}>{h.firma || "—"}</span>
-                    <span>
-                      {h.yukDurumu === "loaded" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#dbeafe", color: "#1d6abf", padding: "1px 6px", borderRadius: 2 }}>Dolu</span>}
-                      {h.yukDurumu === "empty" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#f1f5f9", color: "#475569", padding: "1px 6px", borderRadius: 2 }}>Bos</span>}
-                      {h.yukDurumu === "chassis-only" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#d97706", padding: "1px 6px", borderRadius: 2 }}>Chassis</span>}
-                      {!h.yukDurumu && <span style={{ color: "#cbd5e1", fontSize: 9 }}>—</span>}
-                    </span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 11, color: ekUcret > 0 ? "#dc2626" : "#94a3b8" }}>
-                      {ekUcret > 0 ? `${ekUcret.toLocaleString("en-US")} ₺` : "—"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "detay" && selectedContainer && (() => {
-          const c = containers.find(x => x.id === selectedContainer.id) || selectedContainer;
-          return (
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* DASHBOARD TAB                                         */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "dashboard" && (
             <div>
-              <button className="btn btn-ghost" style={{ marginBottom: 20, fontSize: 11 }} onClick={() => { setActiveTab("liste"); setSelectedContainer(null); }}>← Geri</button>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 20 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div className="card">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                      <div>
-                        <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 18, color: "#1d6abf", fontWeight: 700 }}>{c.containerNo}</div>
-                        <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", marginTop: 4 }}>{c.id}</div>
-                      </div>
-                      <span className={`badge badge-${c.durum}`}>{c.durum === "active" ? "Active" : "Closed"}</span>
-                    </div>
-                    {[
-                      ["Customer", c.musteri],
-                      ["Chassis No", c.chassisNo],
-                      ["Container Type", c.containerType || "—"],
-                      ["Cargo Weight", c.kg ? `${Number(c.kg).toLocaleString("en-US")} kg` : "—"],
-                      ["ADR", c.adr ? "⚠ Yes" : "No"],
-                      ["Port Departure", c.limanCikis],
-                      ["Port Return", c.limanGiris || "—"],
-                      ["Total Days", `${gunFarki(c.limanCikis, c.limanGiris)} days`],
-                      ["Total KM", `${totalKm(c.hareketler).toLocaleString("en-US")} km`],
-                      ["Movement Count", `${c.hareketler.length} records`],
-                    ].map(([label, value]) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e2e8f0" }}>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, letterSpacing: 1.5, color: "#64748b", textTransform: "uppercase" }}>{label}</span>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: label === "ADR" && c.adr ? "#dc2626" : "#1e293b", fontWeight: label === "ADR" && c.adr ? 700 : 400 }}>{value}</span>
-                      </div>
-                    ))}
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: "Active Containers", value: aktifler.length, color: "#2563eb", sub: "In operation" },
+                  { label: "Completed", value: kapalilar.length, color: "#059669", sub: "This period" },
+                  { label: "Total Active Days", value: aktifler.reduce((s, c) => s + gunFarki(c.limanCikis, null), 0), color: "#d97706", sub: "Sum of durations" },
+                  { label: "Forecast", value: forecastList.length, color: "#7c3aed", sub: "Upcoming" },
+                ].map(s => (
+                  <div key={s.label} className="bg-white rounded-xl border border-slate-100 p-5">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</div>
+                    <div className="text-3xl font-black mt-1.5" style={{ color: s.color }}>{s.value}</div>
+                    <div className="text-xs text-slate-400 mt-1">{s.sub}</div>
                   </div>
-                  {c.durum === "active" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => setShowAddHareket(true)}>+ Add Movement</button>
-                      <button className="btn btn-danger" style={{ width: "100%" }} onClick={() => setShowKapatModal(true)}>⬡ Return to Port / Kapat</button>
-                    </div>
-                  )}
-                  {c.durum === "closed" && (
-                    <div className="card" style={{ background: "#ecfdf5", borderColor: "#6ee7b7" }}>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, letterSpacing: 2, color: "#059669", textTransform: "uppercase", marginBottom: 8 }}>✓ Operation Complete</div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#94a3b8" }}>
-                        Toplam {gunFarki(c.limanCikis, c.limanGiris)} günlük işlem tamamlandı ve faturalandırıldı.
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="card">
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 12, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>Movement History</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      {surchargeToplamTumu(c.hareketler) > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b", fontWeight: 400, letterSpacing: 0 }}>ek ücret</span>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 18, color: "#dc2626" }}>
-                            {surchargeToplamTumu(c.hareketler).toLocaleString("en-US")} ₺
-                          </span>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b", fontWeight: 400, letterSpacing: 0 }}>total mesafe</span>
-                        <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, color: "#059669" }}>
-                          {totalKm(c.hareketler).toLocaleString("en-US")} km
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {(() => {
-                      const reversed = [...c.hareketler].reverse();
-                      const total = totalKm(c.hareketler);
-                      let cumulative = total;
-                      return reversed.map((h, i) => {
-                        const rowKm = Number(h.km) || 0;
-                        const kmAtPoint = cumulative;
-                        cumulative -= rowKm;
-                        return (
-                          <div key={i} className="hareket-row" style={{ borderLeftColor: i === 0 ? "#059669" : "#3b82f6" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#1d6abf" }}>{h.tarih}</span>
-                                {/* YÜK DURUMU BADGE */}
-                                {h.yukDurumu === "loaded" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#dbeafe", color: "#1d6abf", padding: "1px 7px", borderRadius: 2 }}>📦 Dolu</span>}
-                                {h.yukDurumu === "empty" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#f1f5f9", color: "#475569", padding: "1px 7px", borderRadius: 2 }}>⬜ Boş</span>}
-                                {h.yukDurumu === "chassis-only" && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#d97706", padding: "1px 7px", borderRadius: 2 }}>🚛 Chassis</span>}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#64748b" }}>{h.surucu}</span>
-                                {c.durum === "active" && (
-                                  <button onClick={() => {
-                                    const realIdx = c.hareketler.length - 1 - i;
-                                    setEditHareketIdx(realIdx);
-                                    setEditHareket({ ...h });
-                                    setEditSurchargeLines(h.surcharges || []);
-                                    setEditNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
-                                  }} style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 3, color: "#1d6abf", fontSize: 10, fontWeight: 600, padding: "1px 8px", cursor: "pointer", fontFamily: "'Roboto', sans-serif" }}>
-                                    ✏ Düzenle
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#1e293b", marginBottom: 4 }}>{h.konum}</div>
-                            {h.yukDurumu === "chassis-only" && h.yukNotu && (
-                              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#d97706", background: "#fef9c3", border: "1px solid #fcd34d", borderRadius: 2, padding: "2px 8px", marginBottom: 4 }}>📋 {h.yukNotu}</div>
-                            )}
-                            {(h.firma || h.referans) && (
-                              <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
-                                {h.firma && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#7c3aed", background: "#ede9fe", border: "1px solid #c4b5fd", padding: "1px 8px", borderRadius: 2 }}>{h.firma}</span>}
-                                {h.referans && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "1px 8px", borderRadius: 2 }}>REF: {h.referans}</span>}
-                              </div>
-                            )}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              {h.aciklama && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{h.aciklama}</div>}
-                              {rowKm > 0 && (
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-                                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b" }}>this route</span>
-                                  <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 8px", borderRadius: 2 }}>{rowKm.toLocaleString("en-US")} km</span>
-                                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b" }}>total</span>
-                                  <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: "#059669", background: "#ecfdf5", border: "1px solid #6ee7b7", padding: "1px 8px", borderRadius: 2 }}>{kmAtPoint.toLocaleString("en-US")} km</span>
-                                </div>
-                              )}
-                            </div>
-                            {(h.surcharges || []).length > 0 && (
-                              <div style={{ marginTop: 8, borderTop: "1px dashed #e2e8f0", paddingTop: 8 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>Surcharges</div>
-                                  <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: "#dc2626", background: "#fee2e2", border: "1px solid #fca5a5", padding: "2px 10px", borderRadius: 2 }}>
-                                    Total: {surchargeToplamHareket(h).toLocaleString("en-US")} ₺
-                                  </div>
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                  {h.surcharges.map((sc, si) => {
-                                    const tip = SURCHARGE_TIPLERI[sc.tip] || SURCHARGE_TIPLERI.diger;
-                                    return (
-                                      <div key={si} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: tip.bg, border: `1px solid ${tip.border}`, borderRadius: 3, padding: "4px 10px" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                          <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 600, color: tip.color }}>{tip.label}</span>
-                                          {sc.aciklama && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{sc.aciklama}</span>}
-                                          {sc.tip === "waiting" && sc.saat && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{sc.saat} saat × {Number(sc.saatUcreti).toLocaleString("en-US")} ₺</span>}
-                                        </div>
-                                        <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: tip.color }}>{Number(sc.tutar).toLocaleString("en-US")} ₺</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {activeTab === "ayarlar" && (
-          <div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 300, fontSize: 11, letterSpacing: 3, color: "#64748b", textTransform: "uppercase", marginBottom: 20 }}>
-              Definitions / Chassis Management
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 20 }}>
-              {[
-                { label: "Total Chassis", value: chassisWithDurum.length, color: "#1d6abf" },
-                { label: "Available", value: chassisWithDurum.filter(c => c.durum === "available").length, color: "#059669" },
-                { label: "In Use", value: chassisWithDurum.filter(c => c.durum === "in-use").length, color: "#d97706" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="stat-card">
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 44, color, lineHeight: 1 }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #e2e8f0" }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase" }}>Chassis List</div>
-                <button className="btn btn-primary" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setShowAddChassis(true)}>+ Add Chassis</button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.8fr 1fr auto", gap: 8, padding: "10px 16px", fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", borderBottom: "1px solid #e2e8f0" }}>
-                <span>Chassis No</span><span>Plate No</span><span>Type</span><span>Status</span><span></span>
-              </div>
-              {chassisWithDurum.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#64748b", padding: "40px", fontFamily: "'Roboto', sans-serif", fontSize: 12 }}>Henüz chassis eklenmedi</div>
-              ) : chassisWithDurum.map(ch => {
-                const aktifContainer = containers.find(c => c.durum === "active" && c.chassisNo === ch.chassisNo);
-                return (
-                  <div key={ch.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.8fr 1fr auto", gap: 8, padding: "13px 16px", alignItems: "center", borderBottom: "1px solid #f1f5f9" }}>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 12, color: "#1d6abf", fontWeight: 700 }}>{ch.chassisNo}</span>
-                    <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{ch.plakaNo}</span>
-                    <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {(Array.isArray(ch.tip) ? ch.tip : ch.tip ? [ch.tip] : []).map(t => (
-                        <span key={t} style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1d6abf", padding: "2px 8px", borderRadius: 2 }}>{t}</span>
-                      ))}
-                    </span>
-                    <div>
-                      <span style={ch.durum === "available"
-                        ? { background: "#d1fae5", color: "#059669", border: "1px solid #6ee7b7", display: "inline-block", padding: "3px 10px", borderRadius: 2, fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }
-                        : { background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", display: "inline-block", padding: "3px 10px", borderRadius: 2, fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
-                        {ch.durum === "available" ? "Available" : "In Use"}
-                      </span>
-                      {aktifContainer && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b", marginTop: 3 }}>{aktifContainer.containerNo}</div>}
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: "4px 10px" }}
-                        onClick={() => setEditChassis({ ...ch })}>✏ Edit</button>
-                      <button className="btn btn-danger" style={{ fontSize: 10, padding: "4px 10px", opacity: ch.durum === "in-use" ? 0.3 : 1, cursor: ch.durum === "in-use" ? "not-allowed" : "pointer" }}
-                        onClick={() => ch.durum !== "in-use" && handleDeleteChassis(ch.id, ch.chassisNo)}
-                        title={ch.durum === "in-use" ? "Cannot delete a chassis that is in use" : "Delete"}>Delete</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* MODAL: Yeni Container */}
-      {showAddContainer && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase", marginBottom: 20 }}>New Container</div>
-            {[["Container No", "containerNo", "MSCU1234567"], ["Customer / Company", "musteri", "Company Name"]].map(([label, key, ph]) => (
-              <div key={key} style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                <input className="input" placeholder={ph} value={newContainer[key]} onChange={e => setNewContainer(p => ({ ...p, [key]: e.target.value }))} />
-              </div>
-            ))}
-
-            {/* CONTAINER TYPE */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Container Type</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {["20FT", "40FT", "45FT"].map(t => (
-                  <button key={t} onClick={() => setNewContainer(p => ({ ...p, containerType: t }))}
-                    style={{ flex: 1, padding: "9px 6px", borderRadius: 3, border: `2px solid ${newContainer.containerType === t ? "#1d6abf" : "#e2e8f0"}`, background: newContainer.containerType === t ? "#dbeafe" : "#fff", color: newContainer.containerType === t ? "#1d6abf" : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    {t}
-                  </button>
                 ))}
               </div>
-            </div>
 
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                Select Chassis <span style={{ color: "#dc2626" }}>*</span>
-              </div>
-              <select className="input" value={newContainer.chassisNo}
-                onChange={e => { setNewContainer(p => ({ ...p, chassisNo: e.target.value })); setContainerFormError(""); }}
-                style={{ cursor: "pointer", borderColor: containerFormError ? "#dc2626" : undefined }}>
-                <option value="">— Chassis seçin —</option>
-                {musaitChassis.map(ch => (
-                  <option key={ch.id} value={ch.chassisNo}>{ch.chassisNo} · {ch.plakaNo} · {Array.isArray(ch.tip) ? ch.tip.join(", ") : (ch.tip || "")}</option>
-                ))}
-              </select>
-              {containerFormError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {containerFormError}</div>}
-              {musaitChassis.length === 0 && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#dc2626", marginTop: 4 }}>⚠ Müsait chassis bulunamadı. Ayarlar'dan chassis ekleyin.</div>}
-            </div>
-
-            {/* KG + ADR */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Cargo Weight (KG)</div>
-                <input type="number" className="input" placeholder="e.g. 24000" min="0" value={newContainer.kg}
-                  onChange={e => setNewContainer(p => ({ ...p, kg: e.target.value }))} style={{ textAlign: "right" }} />
-              </div>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>ADR (Hazardous Goods)</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {[["No", false], ["Yes", true]].map(([label, val]) => (
-                    <button key={label} onClick={() => setNewContainer(p => ({ ...p, adr: val }))}
-                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, border: `2px solid ${newContainer.adr === val ? (val ? "#dc2626" : "#059669") : "#e2e8f0"}`, background: newContainer.adr === val ? (val ? "#fee2e2" : "#d1fae5") : "#fff", color: newContainer.adr === val ? (val ? "#dc2626" : "#059669") : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      {label}
-                    </button>
+              {/* Carbon widget */}
+              {co2AllTotal() > 0 && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {[
+                    { label: "🌍 Fleet CO₂", value: `${(co2AllTotal() / 1000).toFixed(2)} t`, sub: `${co2AllTotal().toFixed(1)} kg total`, color: "#059669" },
+                    { label: "⚡ Active CO₂", value: `${(co2AllActive() / 1000).toFixed(2)} t`, sub: `${aktifler.length} containers`, color: "#d97706" },
+                    { label: "🌳 Tree Equiv.", value: Math.round(co2AllTotal() / 21), sub: "trees/year to offset", color: "#047857" },
+                    { label: "💶 Carbon Cost", value: `€${Math.round(co2AllTotal() / 1000 * 18)}`, sub: "~€18/ton estimate", color: "#7c3aed" },
+                  ].map(s => (
+                    <div key={s.label} className="bg-white rounded-xl border border-slate-100 p-5" style={{ borderLeft: `3px solid ${s.color}` }}>
+                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</div>
+                      <div className="text-2xl font-black mt-1.5" style={{ color: s.color }}>{s.value}</div>
+                      <div className="text-xs text-slate-400 mt-1">{s.sub}</div>
+                    </div>
                   ))}
                 </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Port Departure Date</div>
-              <input type="date" className="input" value={newContainer.limanCikis} onChange={e => setNewContainer(p => ({ ...p, limanCikis: e.target.value }))} />
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddContainer}>Open Container</button>
-              <button className="btn btn-ghost" onClick={() => { setShowAddContainer(false); setContainerFormError(""); }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Hareket Ekle */}
-      {showAddHareket && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: 560, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 18, color: "#1d6abf", marginBottom: 20 }}>🚛 Add Movement</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {[["Driver", "surucu", "Driver name"], ["Company", "firma", "Company name"]].map(([label, key, ph]) => (
-                <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: addErrors[key] ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}{addErrors[key] && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {addErrors[key]}</span>}</div>
-                  <input className="input" placeholder={ph} value={newHareket[key]}
-                    onChange={e => { setNewHareket(p => ({ ...p, [key]: e.target.value })); setAddErrors(p => ({ ...p, [key]: "" })); }}
-                    style={{ borderColor: addErrors[key] ? "#dc2626" : undefined }} />
-                </div>
-              ))}
-            </div>
-
-            {/* YÜK DURUMU */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Container Load Status</div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                {[
-                  { val: "loaded",   label: "📦 Loaded",          bg: "#dbeafe", color: "#1d6abf", border: "#93c5fd" },
-                  { val: "empty",    label: "⬜ Empty",           bg: "#f1f5f9", color: "#475569", border: "#cbd5e1" },
-                  { val: "chassis-only",label: "🚛 Chassis Only", bg: "#fef3c7", color: "#d97706", border: "#fcd34d" },
-                ].map(opt => (
-                  <button key={opt.val} onClick={() => setNewHareket(p => ({ ...p, yukDurumu: opt.val }))}
-                    style={{ flex: 1, padding: "8px 6px", borderRadius: 3, border: `2px solid ${newHareket.yukDurumu === opt.val ? opt.color : "#e2e8f0"}`, background: newHareket.yukDurumu === opt.val ? opt.bg : "#fff", color: newHareket.yukDurumu === opt.val ? opt.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              {newHareket.yukDurumu === "chassis-only" && (
-                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={newHareket.yukNotu} onChange={e => setNewHareket(p => ({ ...p, yukNotu: e.target.value }))} style={{ marginTop: 8 }} />
               )}
-              {/* KG — mandatory, label changes by load status */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                  {newHareket.yukDurumu === "loaded" ? "📦 Cargo Weight (KG)" : newHareket.yukDurumu === "empty" ? "⬜ Tare Weight (KG)" : "🚛 Chassis Weight (KG)"}
-                  {" "}<span style={{ color: "#dc2626" }}>*</span>
+
+              {/* Active containers table */}
+              <div className="bg-white rounded-xl border border-slate-100 mb-6">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Active Containers</h2>
+                  <span className="text-xs text-slate-400">{aktifler.length} active</span>
                 </div>
-                <input type="number" className="input" min="0"
-                  placeholder={newHareket.yukDurumu === "loaded" ? "e.g. 24000 (cargo + container)" : newHareket.yukDurumu === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
-                  value={newHareket.kg}
-                  onChange={e => { setNewHareket(p => ({ ...p, kg: e.target.value })); setAddErrors(p => ({ ...p, kg: "" })); }}
-                  style={{ textAlign: "right", borderColor: addErrors.kg ? "#dc2626" : undefined }} />
-                {addErrors.kg && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {addErrors.kg}</div>}
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
-                  {newHareket.yukDurumu === "loaded" ? "Total weight including cargo and container" : newHareket.yukDurumu === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
-                </div>
-              </div>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: addErrors.konum ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
-                Location / Route{addErrors.konum && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {addErrors.konum}</span>}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>📍 Departure</div>
-                  <SuggestInput
-                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
-                    value={newHareket.konumFrom}
-                    field="addFrom"
-                    placeholder="City, street or postcode"
-                    borderColor={addErrors.konum ? "#dc2626" : undefined}
-                    onChange={v => {
-                      setNewHareket(p => ({ ...p, konumFrom: v, konum: v && p.konumTo ? v + " → " + p.konumTo : v || p.konumTo || "" }));
-                      setAddErrors(p => ({ ...p, konum: "" }));
-                    }}
-                    onSelect={(display, formatted) => {
-                      setNewHareket(p => ({ ...p, konumFrom: formatted, konum: formatted && p.konumTo ? formatted + " → " + p.konumTo : formatted || p.konumTo || "" }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>🏁 Destination</div>
-                  <SuggestInput
-                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
-                    value={newHareket.konumTo}
-                    field="addTo"
-                    placeholder="City, street or postcode"
-                    borderColor={addErrors.konum ? "#dc2626" : undefined}
-                    onChange={v => {
-                      setNewHareket(p => ({ ...p, konumTo: v, konum: p.konumFrom && v ? p.konumFrom + " → " + v : p.konumFrom || v || "" }));
-                      setAddErrors(p => ({ ...p, konum: "" }));
-                    }}
-                    onSelect={(display, formatted) => {
-                      setNewHareket(p => ({ ...p, konumTo: formatted, konum: p.konumFrom && formatted ? p.konumFrom + " → " + formatted : p.konumFrom || formatted || "" }));
-                    }}
-                  />
-                </div>
-              </div>
-              <button type="button" className="btn btn-primary" style={{ width: "100%", fontSize: 10, padding: "8px" }}
-                onClick={() => calculateKm(newHareket.konumFrom, newHareket.konumTo, (km) => setNewHareket(p => ({ ...p, km })))}
-                disabled={kmLoading || !newHareket.konumFrom || !newHareket.konumTo}>
-                {kmLoading ? "⏳ Calculating..." : "📍 Calculate KM Automatically"}
-              </button>
-              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 6 }}>⚠ {kmError}</div>}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {[["Reference", "referans", "Ref. no"], ["Note", "aciklama", "Note"]].map(([label, key, ph]) => (
-                <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                  <input className="input" placeholder={ph} value={newHareket[key]} onChange={e => setNewHareket(p => ({ ...p, [key]: e.target.value }))} />
-                </div>
-              ))}
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                  KM {kmLoading && <span style={{ color: "#3b82f6" }}>calculating...</span>}
-                </div>
-                <input type="number" className="input" placeholder="120 or auto-calculate ↑" min="0" value={newHareket.km}
-                  onChange={e => setNewHareket(p => ({ ...p, km: e.target.value }))}
-                  style={{ textAlign: "right", borderColor: kmLoading ? "#93c5fd" : undefined }} />
-              </div>
-            </div>
-            {/* EURO NORM + CO2 PREVIEW */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
-                🌍 Vehicle Standard (Euro Norm)
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.entries(EMISSION_FACTORS).map(([key, ef]) => (
-                  <button key={key} type="button"
-                    onClick={() => setNewHareket(p => ({ ...p, euronorm: key }))}
-                    style={{ padding: "6px 10px", borderRadius: 3, border: `2px solid ${newHareket.euronorm === key ? ef.color : "#e2e8f0"}`, background: newHareket.euronorm === key ? ef.bg : "#fff", color: newHareket.euronorm === key ? ef.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                    {ef.label}
-                  </button>
-                ))}
-              </div>
-              {(() => {
-                const co2 = calcCO2(newHareket.km, newHareket.kg || selectedContainer?.kg, newHareket.euronorm);
-                const ef = EMISSION_FACTORS[newHareket.euronorm] || EMISSION_FACTORS.euro6;
-                return co2 ? (
-                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, background: ef.bg, border: `1px solid ${ef.border}`, borderRadius: 4, padding: "8px 12px" }}>
-                    <span style={{ fontSize: 16 }}>🌿</span>
-                    <div>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 14, color: ef.color }}>{co2} kg CO₂</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginLeft: 8 }}>estimated for this route</span>
-                    </div>
-                  </div>
+                {aktifler.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-sm">No active containers</div>
                 ) : (
-                  <div style={{ marginTop: 6, fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#cbd5e1" }}>
-                    Enter KM + container weight (KG) to see CO₂ estimate
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-max">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          {["Container No","Chassis","Customer","Departure","Days","Last Location",""].map(h => (
+                            <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aktifler.map(c => (
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
+                            onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
+                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600">{c.containerNo}</td>
+                            <td className="px-5 py-3.5 text-sm text-slate-500">{c.chassisNo}</td>
+                            <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.musteri}</td>
+                            <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanCikis}</td>
+                            <td className="px-5 py-3.5">
+                              <span className={`text-sm font-black ${gunFarki(c.limanCikis) > 14 ? "text-red-500" : "text-amber-500"}`}>{gunFarki(c.limanCikis)}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs text-slate-400 max-w-xs truncate">{c.hareketler[c.hareketler.length - 1]?.konum?.split("→").pop()?.trim() || "—"}</td>
+                            <td className="px-5 py-3.5">
+                              <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold whitespace-nowrap"
+                                onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                );
-              })()}
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Date</div>
-              <input type="date" className="input" value={newHareket.tarih} onChange={e => setNewHareket(p => ({ ...p, tarih: e.target.value }))} />
-            </div>
-            <div style={{ borderTop: "2px solid #e2e8f0", paddingTop: 16, marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 12, color: "#475569", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💰 Surcharges (Surcharge)</div>
-              {surchargeLines.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                  {surchargeLines.map((sc, i) => {
-                    const tip = SURCHARGE_TIPLERI[sc.tip] || SURCHARGE_TIPLERI.diger;
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: tip.bg, border: `1px solid ${tip.border}`, borderRadius: 3, padding: "6px 10px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 600, color: tip.color }}>{tip.label}</span>
-                          {sc.aciklama && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{sc.aciklama}</span>}
-                          {sc.tip === "waiting" && sc.saat && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{sc.saat} saat × {Number(sc.saatUcreti).toLocaleString("en-US")} ₺</span>}
+                )}
+              </div>
+
+              {/* Upcoming forecast */}
+              {forecastList.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-100">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Upcoming Containers</h2>
+                    <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold" onClick={() => setActiveTab("forecast")}>View All →</button>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {[...forecastList].sort((a,b) => new Date(a.tahminiTarih) - new Date(b.tahminiTarih)).slice(0,3).map(fc => {
+                      const gk = gunFarki(today(), fc.tahminiTarih);
+                      const gecti = new Date(fc.tahminiTarih) < new Date();
+                      return (
+                        <div key={fc.id} className="flex items-center justify-between px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${fc.onem === "high" ? "bg-red-500" : fc.onem === "urgent" ? "bg-purple-500" : "bg-blue-400"}`} />
+                            <div>
+                              <span className="text-sm font-semibold text-blue-600">{fc.containerNo}</span>
+                              <span className="text-xs text-slate-400 ml-2">{fc.musteri}</span>
+                            </div>
+                          </div>
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${gecti ? "bg-red-50 text-red-600" : gk <= 3 ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"}`}>
+                            {gecti ? `${Math.abs(gk)}d overdue` : gk === 0 ? "Today" : `${gk}d left`}
+                          </span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: tip.color }}>{Number(sc.tutar).toLocaleString("en-US")} ₺</span>
-                          <button onClick={() => setSurchargeLines(prev => prev.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14, lineHeight: 1 }}>✕</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {forecastList.length === 0 && (
+                <div className="bg-white rounded-xl border border-slate-100 p-12 text-center">
+                  <div className="text-4xl text-slate-200 mb-3">◈</div>
+                  <div className="text-sm text-slate-400 mb-4">No upcoming containers</div>
+                  <button className={BTN_P} onClick={() => setActiveTab("forecast")}>+ Add Forecast</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* FORECAST TAB                                          */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "forecast" && (
+            <div>
+              {/* Filter bar */}
+              <div className="bg-white rounded-xl border border-slate-100 p-4 mb-5 flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-36">
+                  <label className={LBL}>Container No</label>
+                  <input className={INP} placeholder="Filter..." value={forecastFilter.containerNo} onChange={e => setForecastFilter(p => ({...p, containerNo: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-36">
+                  <label className={LBL}>Customer</label>
+                  <input className={INP} placeholder="Customer name..." value={forecastFilter.musteri} onChange={e => setForecastFilter(p => ({...p, musteri: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-32">
+                  <label className={LBL}>Est. Date From</label>
+                  <input type="date" className={INP} value={forecastFilter.tarihBas} onChange={e => setForecastFilter(p => ({...p, tarihBas: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-32">
+                  <label className={LBL}>Est. Date To</label>
+                  <input type="date" className={INP} value={forecastFilter.tarihBit} onChange={e => setForecastFilter(p => ({...p, tarihBit: e.target.value}))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  {(forecastFilter.containerNo || forecastFilter.musteri || forecastFilter.tarihBas || forecastFilter.tarihBit) && (
+                    <button className={BTN_G} onClick={() => setForecastFilter({containerNo:"",musteri:"",tarihBas:"",tarihBit:""})}> ✕ Clear</button>
+                  )}
+                  <span className="text-xs text-slate-400">{filteredForecast.length} records</span>
+                  <button className={BTN_P} onClick={() => setShowAddForecast(true)}>+ Add Forecast</button>
+                </div>
+              </div>
+
+              {filteredForecast.length === 0 ? (
+                <div className="bg-white rounded-xl border border-slate-100 p-16 text-center">
+                  <div className="text-4xl text-slate-200 mb-3">◈</div>
+                  <div className="text-sm text-slate-400">{forecastList.length === 0 ? "No forecast records yet" : "No records match the filter criteria"}</div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredForecast.map(fc => {
+                    const gk = gunFarki(today(), fc.tahminiTarih);
+                    const gecti = new Date(fc.tahminiTarih) < new Date();
+                    const linked = containers.find(c => c.containerNo === fc.containerNo);
+                    return (
+                      <div key={fc.id} className="bg-white rounded-xl border border-slate-100 p-5"
+                        style={{ borderLeft: `4px solid ${fc.onem === "high" ? "#ef4444" : fc.onem === "urgent" ? "#7c3aed" : "#3b82f6"}` }}>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <div className="flex-1 min-w-40">
+                            <div className={`text-sm font-bold ${linked ? "text-blue-600 cursor-pointer underline" : "text-slate-700"}`}
+                              onClick={() => { if (linked) { setSelectedContainer(linked); setActiveTab("detay"); } }}>
+                              {fc.containerNo}
+                              {linked && <span className="text-[10px] text-emerald-500 font-normal ml-1">↗ Detail</span>}
+                            </div>
+                            {fc.aciklama && <div className="text-xs text-slate-400 mt-0.5">{fc.aciklama}</div>}
+                          </div>
+                          <div className="text-sm font-medium text-slate-700 min-w-32">{fc.musteri}</div>
+                          <div className="text-xs text-slate-400 min-w-24">
+                            <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wide">Port</div>
+                            {fc.liman || "—"}
+                          </div>
+                          <div className="text-xs text-slate-400 min-w-24">
+                            <div className="font-semibold text-slate-500 uppercase text-[10px] tracking-wide">Est. Date</div>
+                            {fc.tahminiTarih}
+                          </div>
+                          <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${gecti ? "bg-red-50 text-red-600" : gk <= 3 ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"}`}>
+                            {gecti ? `${Math.abs(gk)} days overdue` : gk === 0 ? "Today" : `${gk} days left`}
+                          </span>
+                          <div className="flex gap-2 ml-auto">
+                            <button className={BTN_S} onClick={() => handleForecastToContainer(fc)}>→ Open</button>
+                            <button className={BTN_D} onClick={() => handleDeleteForecast(fc.id, fc.containerNo)}>Delete</button>
+                          </div>
                         </div>
                       </div>
                     );
                   })}
-                  <div style={{ textAlign: "right", fontFamily: "'Roboto', sans-serif", fontSize: 12, fontWeight: 700, color: "#dc2626", paddingRight: 4 }}>
-                    Total Surcharge: {surchargeLines.reduce((s, sc) => s + (Number(sc.tutar) || 0), 0).toLocaleString("en-US")} ₺
-                  </div>
                 </div>
               )}
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, padding: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Add New Item</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Tip</div>
-                    <select className="input" value={newSurcharge.tip} onChange={e => setNewSurcharge(p => ({ ...p, tip: e.target.value, saat: "", saatUcreti: "", tutar: "" }))} style={{ cursor: "pointer" }}>
-                      {Object.entries(SURCHARGE_TIPLERI).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Description</div>
-                    <input className="input" placeholder="optional" value={newSurcharge.aciklama} onChange={e => setNewSurcharge(p => ({ ...p, aciklama: e.target.value }))} />
-                  </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* LISTE (CONTAINERS) TAB                                */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "liste" && (
+            <div>
+              <div className="bg-white rounded-xl border border-slate-100 p-4 mb-5 flex flex-wrap gap-3 items-center">
+                <input className={`${INP} max-w-xs flex-1 min-w-40`} placeholder="Search container, customer, chassis..."
+                  value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <div className="flex gap-2">
+                  {[["all","All"],["active","Active"],["closed","Closed"]].map(([v,l]) => (
+                    <button key={v} onClick={() => setFilterDurum(v)}
+                      className={`text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${filterDurum===v ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{l}</button>
+                  ))}
                 </div>
-                {newSurcharge.tip === "bekleme" ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Time (Saat)</div>
-                      <input type="number" className="input" placeholder="2" min="0" value={newSurcharge.saat}
-                        onChange={e => { const saat = e.target.value; setNewSurcharge(p => ({ ...p, saat, tutar: (Number(saat) * Number(p.saatUcreti)) || "" })); }} style={{ textAlign: "right" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Hourly Rate (₺)</div>
-                      <input type="number" className="input" placeholder="500" min="0" value={newSurcharge.saatUcreti}
-                        onChange={e => { const saatUcreti = e.target.value; setNewSurcharge(p => ({ ...p, saatUcreti, tutar: (Number(p.saat) * Number(saatUcreti)) || "" })); }} style={{ textAlign: "right" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#d97706", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 4 }}>Calculated ₺</div>
-                      <input type="number" className="input" placeholder="0" value={newSurcharge.tutar} readOnly style={{ textAlign: "right", background: "#fef3c7", borderColor: "#fcd34d", fontWeight: 700, color: "#d97706" }} />
-                    </div>
-                  </div>
+                <div className="ml-auto flex gap-2">
+                  <button className={BTN_P} onClick={() => setShowAddContainer(true)}>+ Add</button>
+                  <button className="border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors" onClick={exportContainersCSV}>⬇ Excel</button>
+                  <button className="border border-red-200 text-red-500 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition-colors" onClick={() => exportPDF("containers")}>⊡ PDF</button>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                {filteredContainers.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-sm">No results found</div>
                 ) : (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Amount (₺)</div>
-                    <input type="number" className="input" placeholder="e.g. 1500" min="0" value={newSurcharge.tutar} onChange={e => setNewSurcharge(p => ({ ...p, tutar: e.target.value }))} style={{ textAlign: "right" }} />
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-max">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>{["Container No","Chassis","Customer","Departure","Return","Days","Status",""].map(h=>(
+                          <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}</tr>
+                      </thead>
+                      <tbody>
+                        {filteredContainers.map(c => (
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
+                            onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
+                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600">{c.containerNo}</td>
+                            <td className="px-5 py-3.5 text-sm text-slate-400">{c.chassisNo}</td>
+                            <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.musteri}</td>
+                            <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanCikis}</td>
+                            <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanGiris || "—"}</td>
+                            <td className="px-5 py-3.5 text-sm font-black" style={{ color: c.durum==="active" ? "#f59e0b" : "#94a3b8" }}>{gunFarki(c.limanCikis, c.limanGiris)}</td>
+                            <td className="px-5 py-3.5">
+                              {c.durum === "active"
+                                ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Active</span>
+                                : <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">Closed</span>
+                              }
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold"
+                                onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-                <button className="btn btn-primary" style={{ width: "100%", fontSize: 12 }}
-                  onClick={() => {
-                    if (!newSurcharge.tutar || Number(newSurcharge.tutar) <= 0) return;
-                    setSurchargeLines(prev => [...prev, { ...newSurcharge }]);
-                    setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
-                  }}>+ Add Item to List</button>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddHareket}>💾 Save Movement</button>
-              <button className="btn btn-ghost" onClick={() => { setShowAddHareket(false); setSurchargeLines([]); setAddErrors({}); setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" }); }}>Cancel</button>
+          )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* HAREKETLER (MOVEMENTS) TAB                            */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "hareketler" && (
+            <div>
+              <div className="bg-white rounded-xl border border-slate-100 p-4 mb-5 flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-40">
+                  <label className={LBL}>Container / Customer</label>
+                  <input className={INP} placeholder="Filter..." value={hareketFilter.containerNo} onChange={e => setHareketFilter(p => ({...p, containerNo: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-36">
+                  <label className={LBL}>Driver</label>
+                  <input className={INP} placeholder="Driver name..." value={hareketFilter.surucu} onChange={e => setHareketFilter(p => ({...p, surucu: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-32">
+                  <label className={LBL}>Start Date</label>
+                  <input type="date" className={INP} value={hareketFilter.tarihBas} onChange={e => setHareketFilter(p => ({...p, tarihBas: e.target.value}))} />
+                </div>
+                <div className="flex-1 min-w-32">
+                  <label className={LBL}>End Date</label>
+                  <input type="date" className={INP} value={hareketFilter.tarihBit} onChange={e => setHareketFilter(p => ({...p, tarihBit: e.target.value}))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  {(hareketFilter.containerNo||hareketFilter.surucu||hareketFilter.tarihBas||hareketFilter.tarihBit) && (
+                    <button className={BTN_G} onClick={() => setHareketFilter({containerNo:"",surucu:"",tarihBas:"",tarihBit:""})}> ✕ Clear</button>
+                  )}
+                  <span className="text-xs text-slate-400">{filteredHareketler.length} records</span>
+                  <button className="border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors" onClick={exportHareketlerCSV}>⬇ Excel</button>
+                  <button className="border border-red-200 text-red-500 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition-colors" onClick={() => exportPDF("hareketler")}>⊡ PDF</button>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                {filteredHareketler.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-sm">No records match the filter criteria</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-max">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>{["Date","Container","Customer","Driver","Location / Route","KM","CO₂","Load","Surcharge"].map(h=>(
+                          <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}</tr>
+                      </thead>
+                      <tbody>
+                        {filteredHareketler.map((h,i) => {
+                          const ek = (h.surcharges||[]).reduce((s,sc)=>s+(Number(sc.tutar)||0),0);
+                          const cont = containers.find(x=>x.containerNo===h.containerNo);
+                          const co2 = calcCO2(h.km, h.kg||cont?.kg, h.euronorm);
+                          const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
+                          return (
+                            <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
+                              onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>
+                              <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">{h.tarih}</td>
+                              <td className="px-5 py-3.5 text-xs font-bold text-blue-600 whitespace-nowrap"
+                                onClick={e=>{e.stopPropagation();const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</td>
+                              <td className="px-5 py-3.5 text-xs text-slate-500">{h.musteri}</td>
+                              <td className="px-5 py-3.5 text-xs text-slate-700">{h.surucu}</td>
+                              <td className="px-5 py-3.5 text-xs text-slate-400 max-w-xs truncate">{h.konum}</td>
+                              <td className="px-5 py-3.5 text-xs font-bold" style={{ color: h.km ? "#f59e0b" : "#94a3b8" }}>{h.km ? `${Number(h.km).toLocaleString()} km` : "—"}</td>
+                              <td className="px-5 py-3.5">
+                                {co2 ? <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: ef.bg, color: ef.color }}>{co2}kg</span> : <span className="text-slate-300">—</span>}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {h.yukDurumu === "loaded" && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">📦 Loaded</span>}
+                                {h.yukDurumu === "empty" && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">⬜ Empty</span>}
+                                {h.yukDurumu === "chassis-only" && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">🚛 Chassis</span>}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs font-bold" style={{ color: ek > 0 ? "#ef4444" : "#94a3b8" }}>{ek > 0 ? `${ek.toLocaleString()} ₺` : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* AYARLAR (SETTINGS) TAB                                */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "ayarlar" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { label: "Total Chassis", value: chassisWithDurum.length, color: "#2563eb" },
+                  { label: "Available", value: chassisWithDurum.filter(c=>c.durum==="available").length, color: "#059669" },
+                  { label: "In Use", value: chassisWithDurum.filter(c=>c.durum==="in-use").length, color: "#d97706" },
+                ].map(s => (
+                  <div key={s.label} className="bg-white rounded-xl border border-slate-100 p-5">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</div>
+                    <div className="text-4xl font-black mt-1" style={{ color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Chassis List</h2>
+                  <button className={BTN_P} onClick={()=>setShowAddChassis(true)}>+ Add Chassis</button>
+                </div>
+                {chassisWithDurum.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-sm">No chassis added yet</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-max">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>{["Chassis No","Plate No","Type","Status",""].map(h=>(
+                          <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}</tr>
+                      </thead>
+                      <tbody>
+                        {chassisWithDurum.map(ch => {
+                          const ac = containers.find(c=>c.durum==="active"&&c.chassisNo===ch.chassisNo);
+                          return (
+                            <tr key={ch.id} className="border-b border-slate-50 last:border-0">
+                              <td className="px-5 py-3.5 text-sm font-bold text-blue-600">{ch.chassisNo}</td>
+                              <td className="px-5 py-3.5 text-sm text-slate-500">{ch.plakaNo}</td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex gap-1 flex-wrap">
+                                  {(Array.isArray(ch.tip)?ch.tip:ch.tip?[ch.tip]:[]).map(t=>(
+                                    <span key={t} className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">{t}</span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {ch.durum === "available"
+                                  ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Available</span>
+                                  : <div>
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>In Use</span>
+                                      {ac && <div className="text-xs text-slate-400 mt-1">{ac.containerNo}</div>}
+                                    </div>
+                                }
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex gap-2">
+                                  <button className={BTN_G} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>setEditChassis({...ch})}> ✏ Edit</button>
+                                  <button className={BTN_D} style={{fontSize:"11px",padding:"5px 10px",opacity:ch.durum==="in-use"?0.4:1,cursor:ch.durum==="in-use"?"not-allowed":"pointer"}}
+                                    onClick={()=>ch.durum!=="in-use"&&handleDeleteChassis(ch.id,ch.chassisNo)}
+                                    title={ch.durum==="in-use"?"Cannot delete a chassis that is in use":"Delete"}>Delete</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* DETAY (DETAIL) TAB                                    */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "detay" && (() => {
+            if (!selectedContainer) return <div className="py-16 text-center text-slate-400 text-sm">No container selected.</div>;
+            const c = selectedContainer;
+            const totalKm = toplamKm(c.hareketler);
+            const totalEk = surchargeToplamTumu(c.hareketler);
+            const totalCO2 = co2Container(c);
+            return (
+              <div>
+                <div className="flex items-center gap-3 mb-6">
+                  <button className={BTN_G} onClick={()=>{setActiveTab("liste");setSelectedContainer(null);}}>← Back</button>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">{c.containerNo}</h2>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide">{c.musteri}</p>
+                  </div>
+                  <div className="ml-auto flex gap-2">
+                    {c.durum === "active" && (
+                      <>
+                        <button className={BTN_P} onClick={()=>setShowAddHareket(true)}>+ Add Movement</button>
+                        <button className={BTN_D} onClick={()=>setShowKapatModal(true)}>⬡ Return to Port</button>
+                      </>
+                    )}
+                    {c.durum === "closed" && <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-500">✓ Operation Complete</span>}
+                  </div>
+                </div>
+
+                {/* Info cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  {[
+                    ["Chassis No", c.chassisNo],
+                    ["Container Type", c.containerType||"—"],
+                    ["ADR", c.adr ? "⚠ Yes" : "No"],
+                    ["Port Departure", c.limanCikis],
+                    ["Port Return", c.limanGiris||"—"],
+                    ["Total Days", `${gunFarki(c.limanCikis,c.limanGiris)} days`],
+                    ["Total KM", `${totalKm.toLocaleString()} km`],
+                    ["🌍 Total CO₂", totalCO2 > 0 ? `${totalCO2.toFixed(1)} kg` : "No data"],
+                  ].map(([l,v])=>(
+                    <div key={l} className="bg-white rounded-xl border border-slate-100 p-4">
+                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{l}</div>
+                      <div className={`text-sm font-bold ${l==="ADR"&&c.adr?"text-red-600":"text-slate-800"}`}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Surcharge summary */}
+                {totalEk > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3.5 mb-5 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-red-600">Total Surcharges</span>
+                    <span className="text-lg font-black text-red-600">{totalEk.toLocaleString()} ₺</span>
+                  </div>
+                )}
+
+                {/* Movement history */}
+                <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Movement History</h3>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {c.hareketler.map((h,i)=>{
+                      const rowKm = Number(h.km)||0;
+                      const kmAtPoint = c.hareketler.slice(0,i+1).reduce((s,x)=>s+(Number(x.km)||0),0);
+                      const co2h = calcCO2(h.km, h.kg||c.kg, h.euronorm);
+                      const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
+                      return (
+                        <div key={i} className="px-5 py-4" style={{borderLeft: i===c.hareketler.length-1?"3px solid #059669":"3px solid #e2e8f0"}}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-slate-400">{h.tarih}</span>
+                                {h.surucu && h.surucu !== "-" && <span className="text-xs text-slate-500">· {h.surucu}</span>}
+                                {h.firma && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200">{h.firma}</span>}
+                                {h.referans && <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">REF: {h.referans}</span>}
+                              </div>
+                              <div className="text-sm text-slate-700 font-medium">{h.konum}</div>
+                              {h.aciklama && <div className="text-xs text-slate-400 mt-0.5">{h.aciklama}</div>}
+                              {h.yukDurumu === "loaded" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">📦 Loaded{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
+                              {h.yukDurumu === "empty" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">⬜ Empty{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
+                              {h.yukDurumu === "chassis-only" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">🚛 Chassis{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                              {rowKm > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-400">route</span>
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">{rowKm.toLocaleString()} km</span>
+                                  <span className="text-xs text-slate-400">total</span>
+                                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">{kmAtPoint.toLocaleString()} km</span>
+                                </div>
+                              )}
+                              {co2h && <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:ef.bg,color:ef.color}}>{co2h} kg CO₂</span>}
+                              <button className="text-[10px] text-blue-500 hover:text-blue-700 font-semibold"
+                                onClick={()=>{setEditHareketIdx(i);setEditHareket({...h,euronorm:h.euronorm||"euro6"});setEditSurchargeLines(h.surcharges||[]);}}>✏ Edit</button>
+                            </div>
+                          </div>
+                          {(h.surcharges||[]).length>0&&(
+                            <div className="mt-3 pt-3 border-t border-slate-100">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Surcharges</span>
+                                <span className="text-sm font-black text-red-500">Total: {surchargeToplamHareket(h).toLocaleString()} ₺</span>
+                              </div>
+                              <div className="space-y-1.5">
+                                {h.surcharges.map((sc,si)=>{
+                                  const tip=SURCHARGE_TIPLERI[sc.tip]||SURCHARGE_TIPLERI.diger;
+                                  return(
+                                    <div key={si} className="flex items-center justify-between rounded-lg px-3 py-2" style={{background:tip.bg,border:`1px solid ${tip.border}`}}>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold" style={{color:tip.color}}>{tip.label}</span>
+                                        {sc.aciklama&&<span className="text-xs text-slate-500">{sc.aciklama}</span>}
+                                        {sc.tip==="waiting"&&sc.saat&&<span className="text-xs text-slate-400">{sc.saat}h × {Number(sc.saatUcreti).toLocaleString()} ₺</span>}
+                                      </div>
+                                      <span className="text-sm font-black" style={{color:tip.color}}>{Number(sc.tutar).toLocaleString()} ₺</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+        </main>
+      </div>{/* end main */}
+
+      {/* ════════════════════════════════════════════════════════════ */}
+      {/* MODALS                                                      */}
+      {/* ════════════════════════════════════════════════════════════ */}
+
+      {/* MODAL: New Container */}
+      {showAddContainer && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-base font-bold text-slate-800">New Container</h2>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setShowAddContainer(false);setContainerFormError("");}}>×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              {[["Container No","containerNo","MSCU1234567"],["Customer / Company","musteri","Company Name"]].map(([l,k,ph])=>(
+                <div key={k}>
+                  <label className={LBL}>{l}</label>
+                  <input className={INP} placeholder={ph} value={newContainer[k]} onChange={e=>setNewContainer(p=>({...p,[k]:e.target.value}))} />
+                </div>
+              ))}
+              <div>
+                <label className={LBL}>Container Type</label>
+                <div className="flex gap-2">
+                  {["20FT","40FT","45FT"].map(t=>(
+                    <button key={t} type="button" onClick={()=>setNewContainer(p=>({...p,containerType:t}))}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${newContainer.containerType===t?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className={LBL}>Select Chassis <span className="text-red-500">*</span></label>
+                <select className={`${INP} cursor-pointer`} value={newContainer.chassisNo}
+                  onChange={e=>{setNewContainer(p=>({...p,chassisNo:e.target.value}));setContainerFormError("");}}
+                  style={{borderColor:containerFormError?"#ef4444":undefined}}>
+                  <option value="">— Select chassis —</option>
+                  {musaitChassis.map(ch=>(
+                    <option key={ch.id} value={ch.chassisNo}>{ch.chassisNo} · {ch.plakaNo} · {Array.isArray(ch.tip)?ch.tip.join(", "):(ch.tip||"")}</option>
+                  ))}
+                </select>
+                {containerFormError&&<p className="text-red-500 text-xs mt-1.5">⚠ {containerFormError}</p>}
+                {musaitChassis.length===0&&<p className="text-red-500 text-xs mt-1.5">⚠ No available chassis. Add chassis in Settings.</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LBL}>Cargo Weight (KG)</label>
+                  <input type="number" className={INP} placeholder="e.g. 24000" min="0" value={newContainer.kg} onChange={e=>setNewContainer(p=>({...p,kg:e.target.value}))} />
+                </div>
+                <div>
+                  <label className={LBL}>ADR (Hazardous)</label>
+                  <div className="flex gap-2">
+                    {[["No",false],["Yes",true]].map(([l,v])=>(
+                      <button key={l} type="button" onClick={()=>setNewContainer(p=>({...p,adr:v}))}
+                        className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${newContainer.adr===v?(v?"border-red-500 bg-red-50 text-red-700":"border-emerald-500 bg-emerald-50 text-emerald-700"):"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className={LBL}>Port Departure Date</label>
+                <input type="date" className={INP} value={newContainer.limanCikis} onChange={e=>setNewContainer(p=>({...p,limanCikis:e.target.value}))} />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button className={`${BTN_S} flex-1`} onClick={handleAddContainer}>Open Container</button>
+              <button className={BTN_G} onClick={()=>{setShowAddContainer(false);setContainerFormError("");}}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: Kapat */}
+      {/* MODAL: Add Movement */}
+      {showAddHareket && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-xl rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-base font-bold text-blue-600">🚛 Add Movement</h2>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[["Driver","surucu","Driver name"],["Company","firma","Company name"]].map(([l,k,ph])=>(
+                  <div key={k}>
+                    <label className={`${LBL} ${addErrors[k]?"text-red-500":""}`}>{l} {addErrors[k]&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {addErrors[k]}</span>}</label>
+                    <input className={`${INP} ${addErrors[k]?"border-red-400":""}`} placeholder={ph} value={newHareket[k]}
+                      onChange={e=>{setNewHareket(p=>({...p,[k]:e.target.value}));setAddErrors(p=>({...p,[k]:""}));}} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Load Status */}
+              <div>
+                <label className={LBL}>Container Load Status</label>
+                <div className="flex gap-2 mb-3">
+                  {[
+                    {val:"loaded",label:"📦 Loaded",active:"border-blue-500 bg-blue-50 text-blue-700"},
+                    {val:"empty",label:"⬜ Empty",active:"border-slate-400 bg-slate-50 text-slate-600"},
+                    {val:"chassis-only",label:"🚛 Chassis Only",active:"border-amber-500 bg-amber-50 text-amber-700"},
+                  ].map(opt=>(
+                    <button key={opt.val} type="button" onClick={()=>setNewHareket(p=>({...p,yukDurumu:opt.val}))}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${newHareket.yukDurumu===opt.val?opt.active:"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{opt.label}</button>
+                  ))}
+                </div>
+                {newHareket.yukDurumu==="chassis-only"&&(
+                  <input className={INP} placeholder="Note: Which container, where to go..." value={newHareket.yukNotu} onChange={e=>setNewHareket(p=>({...p,yukNotu:e.target.value}))} />
+                )}
+                <div className="mt-3">
+                  <label className={`${LBL} ${addErrors.kg?"text-red-500":""}`}>
+                    {newHareket.yukDurumu==="loaded"?"📦 Cargo Weight (KG)":newHareket.yukDurumu==="empty"?"⬜ Tare Weight (KG)":"🚛 Chassis Weight (KG)"} <span className="text-red-500">*</span>
+                    {addErrors.kg&&<span className="text-red-400 text-[10px] normal-case font-normal ml-1">⚠ {addErrors.kg}</span>}
+                  </label>
+                  <input type="number" className={`${INP} ${addErrors.kg?"border-red-400":""}`} min="0" style={{textAlign:"right"}}
+                    placeholder={newHareket.yukDurumu==="loaded"?"e.g. 24000":newHareket.yukDurumu==="empty"?"e.g. 2200":"e.g. 6500"}
+                    value={newHareket.kg} onChange={e=>{setNewHareket(p=>({...p,kg:e.target.value}));setAddErrors(p=>({...p,kg:""}))}} />
+                  <p className="text-xs text-slate-400 mt-1">{newHareket.yukDurumu==="loaded"?"Total including cargo + container":newHareket.yukDurumu==="empty"?"20FT≈2,200kg · 40FT≈3,800kg · 45FT≈4,500kg":"Standard chassis ≈ 6,000–8,000 kg"}</p>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className={`${LBL} ${addErrors.konum?"text-red-500":""}`}>Location / Route{addErrors.konum&&<span className="text-red-400 text-[10px] normal-case font-normal ml-1">⚠ {addErrors.konum}</span>}</label>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">📍 Departure</div>
+                    <SuggestInput value={newHareket.konumFrom} field="addFrom" placeholder="City, street or postcode"
+                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      onChange={v=>{setNewHareket(p=>({...p,konumFrom:v,konum:v&&p.konumTo?v+" → "+p.konumTo:v||p.konumTo||""}));setAddErrors(p=>({...p,konum:""}));}}
+                      onSelect={(_,fmt)=>{setNewHareket(p=>({...p,konumFrom:fmt,konum:fmt&&p.konumTo?fmt+" → "+p.konumTo:fmt||p.konumTo||""}));}} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">🏁 Destination</div>
+                    <SuggestInput value={newHareket.konumTo} field="addTo" placeholder="City, street or postcode"
+                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      onChange={v=>{setNewHareket(p=>({...p,konumTo:v,konum:p.konumFrom&&v?p.konumFrom+" → "+v:p.konumFrom||v||""}));setAddErrors(p=>({...p,konum:""}));}}
+                      onSelect={(_,fmt)=>{setNewHareket(p=>({...p,konumTo:fmt,konum:p.konumFrom&&fmt?p.konumFrom+" → "+fmt:p.konumFrom||fmt||""}));}} />
+                  </div>
+                </div>
+                <button type="button" className={`${BTN_P} w-full`}
+                  onClick={()=>calculateKm(newHareket.konumFrom,newHareket.konumTo,(km)=>setNewHareket(p=>({...p,km})))}
+                  disabled={kmLoading||!newHareket.konumFrom||!newHareket.konumTo}>
+                  {kmLoading?"⏳ Calculating...":"📍 Calculate KM Automatically"}
+                </button>
+                {kmError&&<p className="text-red-500 text-xs mt-1.5">⚠ {kmError}</p>}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {[["Reference","referans","Ref. no"],["Note","aciklama","Note"]].map(([l,k,ph])=>(
+                  <div key={k}>
+                    <label className={LBL}>{l}</label>
+                    <input className={INP} placeholder={ph} value={newHareket[k]} onChange={e=>setNewHareket(p=>({...p,[k]:e.target.value}))} />
+                  </div>
+                ))}
+                <div>
+                  <label className={LBL}>KM{kmLoading&&<span className="text-blue-400 text-[10px] ml-1 normal-case font-normal"> calculating...</span>}</label>
+                  <input type="number" className={INP} placeholder="auto-calculate ↑" min="0" value={newHareket.km}
+                    onChange={e=>setNewHareket(p=>({...p,km:e.target.value}))} style={{textAlign:"right"}} />
+                </div>
+              </div>
+
+              {/* Euro Norm */}
+              <div>
+                <label className={LBL}>🌍 Vehicle Standard (Euro Norm)</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(EMISSION_FACTORS).map(([k,ef])=>(
+                    <button key={k} type="button" onClick={()=>setNewHareket(p=>({...p,euronorm:k}))}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all`}
+                      style={{borderColor:newHareket.euronorm===k?ef.color:"#e2e8f0",background:newHareket.euronorm===k?ef.bg:"#fff",color:newHareket.euronorm===k?ef.color:"#94a3b8"}}>{ef.label}</button>
+                  ))}
+                </div>
+                {(()=>{
+                  const co2=calcCO2(newHareket.km,newHareket.kg||selectedContainer?.kg,newHareket.euronorm);
+                  const ef=EMISSION_FACTORS[newHareket.euronorm]||EMISSION_FACTORS.euro6;
+                  return co2?(
+                    <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{background:ef.bg,border:`1px solid ${ef.border}`}}>
+                      <span className="text-lg">🌿</span>
+                      <span className="text-base font-black" style={{color:ef.color}}>{co2} kg CO₂</span>
+                      <span className="text-xs text-slate-400">estimated for this route</span>
+                    </div>
+                  ):<p className="text-xs text-slate-300">Enter KM + weight to see CO₂ estimate</p>;
+                })()}
+              </div>
+
+              <div>
+                <label className={LBL}>Date</label>
+                <input type="date" className={INP} value={newHareket.tarih} onChange={e=>setNewHareket(p=>({...p,tarih:e.target.value}))} />
+              </div>
+
+              {/* Surcharges */}
+              <div className="border-t border-slate-100 pt-4">
+                <label className={LBL}>💰 Surcharges</label>
+                {surchargeLines.length>0&&(
+                  <div className="space-y-2 mb-3">
+                    {surchargeLines.map((sc,i)=>{
+                      const tip=SURCHARGE_TIPLERI[sc.tip]||SURCHARGE_TIPLERI.diger;
+                      return(
+                        <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2" style={{background:tip.bg,border:`1px solid ${tip.border}`}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold" style={{color:tip.color}}>{tip.label}</span>
+                            {sc.aciklama&&<span className="text-xs text-slate-500">{sc.aciklama}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black" style={{color:tip.color}}>{Number(sc.tutar).toLocaleString()} ₺</span>
+                            <button onClick={()=>setSurchargeLines(p=>p.filter((_,idx)=>idx!==i))} className="text-slate-400 hover:text-red-500 text-lg leading-none">×</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="text-right text-sm font-black text-red-500">Total: {surchargeLines.reduce((s,sc)=>s+(Number(sc.tutar)||0),0).toLocaleString()} ₺</div>
+                  </div>
+                )}
+                <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Add Surcharge Item</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={LBL}>Type</label>
+                      <select className={`${INP} cursor-pointer`} value={newSurcharge.tip} onChange={e=>setNewSurcharge(p=>({...p,tip:e.target.value,saat:"",saatUcreti:"",tutar:""}))}>
+                        {Object.entries(SURCHARGE_TIPLERI).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={LBL}>Description</label>
+                      <input className={INP} placeholder="optional" value={newSurcharge.aciklama} onChange={e=>setNewSurcharge(p=>({...p,aciklama:e.target.value}))} />
+                    </div>
+                  </div>
+                  {newSurcharge.tip==="waiting"?(
+                    <div className="grid grid-cols-3 gap-2">
+                      <div><label className={LBL}>Hours</label><input type="number" className={INP} placeholder="2" min="0" value={newSurcharge.saat} onChange={e=>{const s=e.target.value;setNewSurcharge(p=>({...p,saat:s,tutar:(Number(s)*Number(p.saatUcreti))||""}))}} style={{textAlign:"right"}} /></div>
+                      <div><label className={LBL}>Rate (₺)</label><input type="number" className={INP} placeholder="500" min="0" value={newSurcharge.saatUcreti} onChange={e=>{const su=e.target.value;setNewSurcharge(p=>({...p,saatUcreti:su,tutar:(Number(p.saat)*Number(su))||""}))}} style={{textAlign:"right"}} /></div>
+                      <div><label className="block text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1.5">Calculated ₺</label><input type="number" className={INP} value={newSurcharge.tutar} readOnly style={{textAlign:"right",background:"#fef3c7",borderColor:"#fcd34d",fontWeight:700,color:"#d97706"}} /></div>
+                    </div>
+                  ):(
+                    <div><label className={LBL}>Amount (₺)</label><input type="number" className={INP} placeholder="e.g. 1500" min="0" value={newSurcharge.tutar} onChange={e=>setNewSurcharge(p=>({...p,tutar:e.target.value}))} style={{textAlign:"right"}} /></div>
+                  )}
+                  <button className={`${BTN_P} w-full`} onClick={()=>{if(!newSurcharge.tutar||Number(newSurcharge.tutar)<=0)return;setSurchargeLines(p=>[...p,{...newSurcharge}]);setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>+ Add Item to List</button>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button className={`${BTN_P} flex-1`} onClick={handleAddHareket}>💾 Save Movement</button>
+              <button className={BTN_G} onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Close / Return to Port */}
       {showKapatModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#dc2626", textTransform: "uppercase", marginBottom: 8 }}>Return to Port</div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#94a3b8", marginBottom: 20 }}>
-              Are you sure you want to close this operation? Billing will be initiated.
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl shadow-2xl p-6">
+            <h2 className="text-base font-bold text-red-600 mb-2">Return to Port</h2>
+            <p className="text-sm text-slate-500 mb-5">Are you sure you want to close this operation? Billing will be initiated.</p>
+            <div className="mb-5">
+              <label className={LBL}>Port Return Date</label>
+              <input type="date" className={INP} id="kapatTarih" defaultValue={today()} />
             </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Port Return Date</div>
-              <input type="date" className="input" id="kapatTarih" defaultValue={today()} />
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => handleKapat(document.getElementById("kapatTarih").value)}>Close and Bill</button>
-              <button className="btn btn-ghost" onClick={() => setShowKapatModal(false)}>Cancel</button>
+            <div className="flex gap-3">
+              <button className={`${BTN_D} flex-1`} onClick={()=>handleKapat(document.getElementById("kapatTarih").value)}>Close and Bill</button>
+              <button className={BTN_G} onClick={()=>setShowKapatModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1758,466 +1638,356 @@ export default function App({ currentUser, onLogout }) {
 
       {/* MODAL: Add Forecast */}
       {showAddForecast && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#7c3aed", textTransform: "uppercase", marginBottom: 20 }}>Add Forecast</div>
-            {[
-              ["Container No", "containerNo", "MSCU1234567"],
-              ["Customer / Company", "musteri", "Company Name"],
-              ["Port", "liman", "Port name..."],
-              ["Description", "aciklama", "Optional note"],
-            ].map(([label, key, ph]) => (
-              <div key={key} style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                <input className="input" placeholder={ph} value={newForecast[key]} onChange={e => setNewForecast(p => ({ ...p, [key]: e.target.value }))} />
-              </div>
-            ))}
-
-            {/* Container Tipi */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Container Type</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {["20FT", "40FT", "45FT"].map(t => (
-                  <button key={t} onClick={() => setNewForecast(p => ({ ...p, containerType: t }))}
-                    style={{ flex: 1, padding: "8px 6px", borderRadius: 3, border: `2px solid ${newForecast.containerType === t ? "#7c3aed" : "#e2e8f0"}`, background: newForecast.containerType === t ? "#ede9fe" : "#fff", color: newForecast.containerType === t ? "#7c3aed" : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-base font-bold text-purple-600">Add Forecast</h2>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>setShowAddForecast(false)}>×</button>
             </div>
-
-            {/* KG + ADR */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              {[["Container No","containerNo","MSCU1234567"],["Customer / Company","musteri","Company Name"],["Port","liman","Port name..."],["Notes","aciklama","Optional note"]].map(([l,k,ph])=>(
+                <div key={k}>
+                  <label className={LBL}>{l}</label>
+                  <input className={INP} placeholder={ph} value={newForecast[k]} onChange={e=>setNewForecast(p=>({...p,[k]:e.target.value}))} />
+                </div>
+              ))}
               <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Cargo Weight (KG)</div>
-                <input type="number" className="input" placeholder="e.g. 24000" min="0" value={newForecast.kg}
-                  onChange={e => setNewForecast(p => ({ ...p, kg: e.target.value }))} style={{ textAlign: "right" }} />
-              </div>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>ADR</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {[["No", false], ["Yes", true]].map(([label, val]) => (
-                    <button key={label} onClick={() => setNewForecast(p => ({ ...p, adr: val }))}
-                      style={{ flex: 1, padding: "8px 6px", borderRadius: 3, border: `2px solid ${newForecast.adr === val ? (val ? "#dc2626" : "#059669") : "#e2e8f0"}`, background: newForecast.adr === val ? (val ? "#fee2e2" : "#d1fae5") : "#fff", color: newForecast.adr === val ? (val ? "#dc2626" : "#059669") : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      {label}
-                    </button>
+                <label className={LBL}>Container Type</label>
+                <div className="flex gap-2">
+                  {["20FT","40FT","45FT"].map(t=>(
+                    <button key={t} type="button" onClick={()=>setNewForecast(p=>({...p,containerType:t}))}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${newForecast.containerType===t?"border-purple-500 bg-purple-50 text-purple-700":"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{t}</button>
                   ))}
                 </div>
               </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Est. Date</div>
-                <input type="date" className="input" value={newForecast.tahminiTarih} onChange={e => setNewForecast(p => ({ ...p, tahminiTarih: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LBL}>Cargo Weight (KG)</label>
+                  <input type="number" className={INP} placeholder="e.g. 24000" min="0" value={newForecast.kg} onChange={e=>setNewForecast(p=>({...p,kg:e.target.value}))} style={{textAlign:"right"}} />
+                </div>
+                <div>
+                  <label className={LBL}>ADR</label>
+                  <div className="flex gap-2">
+                    {[["No",false],["Yes",true]].map(([l,v])=>(
+                      <button key={l} type="button" onClick={()=>setNewForecast(p=>({...p,adr:v}))}
+                        className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${newForecast.adr===v?(v?"border-red-500 bg-red-50 text-red-700":"border-emerald-500 bg-emerald-50 text-emerald-700"):"border-slate-200 text-slate-400"}`}>{l}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Priority</div>
-                <select className="input" value={newForecast.onem} onChange={e => setNewForecast(p => ({ ...p, onem: e.target.value }))} style={{ cursor: "pointer" }}>
-                  <option value="normal">Normal</option>
-                  <option value="high">Yüksek</option>
-                  <option value="urgent">Acil</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LBL}>Est. Date</label>
+                  <input type="date" className={INP} value={newForecast.tahminiTarih} onChange={e=>setNewForecast(p=>({...p,tahminiTarih:e.target.value}))} />
+                </div>
+                <div>
+                  <label className={LBL}>Priority</label>
+                  <select className={`${INP} cursor-pointer`} value={newForecast.onem} onChange={e=>setNewForecast(p=>({...p,onem:e.target.value}))}>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddForecast}>Save</button>
-              <button className="btn btn-ghost" onClick={() => setShowAddForecast(false)}>Cancel</button>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button className="flex-1 bg-purple-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-purple-700 transition-colors" onClick={handleAddForecast}>Save Forecast</button>
+              <button className={BTN_G} onClick={()=>setShowAddForecast(false)}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: Hareket Düzenle */}
+      {/* MODAL: Edit Movement */}
       {editHareket && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: 560, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 18, color: "#d97706", marginBottom: 20 }}>✏ Edit Movement</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {[["Driver", "surucu", "Driver name"], ["Company", "firma", "Company name"]].map(([label, key, ph]) => (
-                <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: editErrors[key] ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}{editErrors[key] && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {editErrors[key]}</span>}</div>
-                  <input className="input" placeholder={ph} value={editHareket[key] || ""}
-                    onChange={e => { setEditHareket(p => ({ ...p, [key]: e.target.value })); setEditErrors(p => ({ ...p, [key]: "" })); }}
-                    style={{ borderColor: editErrors[key] ? "#dc2626" : undefined }} />
-                </div>
-              ))}
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-xl rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <h2 className="text-base font-bold text-amber-600">✏ Edit Movement</h2>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setEditHareketIdx(null);setEditHareket(null);setEditSurchargeLines([]);setEditErrors({});}}>×</button>
             </div>
-
-            {/* YÜK DURUMU - DÜZENLE */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Container Load Status</div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                {[
-                  { val: "loaded",    label: "📦 Loaded",          bg: "#dbeafe", color: "#1d6abf", border: "#93c5fd" },
-                  { val: "empty",     label: "⬜ Empty",           bg: "#f1f5f9", color: "#475569", border: "#cbd5e1" },
-                  { val: "chassis-only", label: "🚛 Chassis Only", bg: "#fef3c7", color: "#d97706", border: "#fcd34d" },
-                ].map(opt => (
-                  <button key={opt.val} onClick={() => setEditHareket(p => ({ ...p, yukDurumu: opt.val }))}
-                    style={{ flex: 1, padding: "8px 6px", borderRadius: 3, border: `2px solid ${(editHareket.yukDurumu || "loaded") === opt.val ? opt.color : "#e2e8f0"}`, background: (editHareket.yukDurumu || "loaded") === opt.val ? opt.bg : "#fff", color: (editHareket.yukDurumu || "loaded") === opt.val ? opt.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
-                    {opt.label}
-                  </button>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[["Driver","surucu","Driver name"],["Company","firma","Company name"]].map(([l,k,ph])=>(
+                  <div key={k}>
+                    <label className={`${LBL} ${editErrors[k]?"text-red-500":""}`}>{l} {editErrors[k]&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {editErrors[k]}</span>}</label>
+                    <input className={`${INP} ${editErrors[k]?"border-red-400":""}`} placeholder={ph} value={editHareket[k]||""}
+                      onChange={e=>{setEditHareket(p=>({...p,[k]:e.target.value}));setEditErrors(p=>({...p,[k]:""}));}} />
+                  </div>
                 ))}
               </div>
-              {(editHareket.yukDurumu || "loaded") === "chassis-only" && (
-                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={editHareket.yukNotu || ""} onChange={e => setEditHareket(p => ({ ...p, yukNotu: e.target.value }))} style={{ marginTop: 8 }} />
-              )}
-              {/* KG — mandatory */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                  {(editHareket.yukDurumu || "loaded") === "loaded" ? "📦 Cargo Weight (KG)" : (editHareket.yukDurumu || "loaded") === "empty" ? "⬜ Tare Weight (KG)" : "🚛 Chassis Weight (KG)"}
-                  {" "}<span style={{ color: "#dc2626" }}>*</span>
-                </div>
-                <input type="number" className="input" min="0"
-                  placeholder={(editHareket.yukDurumu || "loaded") === "loaded" ? "e.g. 24000 (cargo + container)" : (editHareket.yukDurumu || "loaded") === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
-                  value={editHareket.kg || ""}
-                  onChange={e => { setEditHareket(p => ({ ...p, kg: e.target.value })); setEditErrors(p => ({ ...p, kg: "" })); }}
-                  style={{ textAlign: "right", borderColor: editErrors.kg ? "#dc2626" : undefined }} />
-                {editErrors.kg && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {editErrors.kg}</div>}
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
-                  {(editHareket.yukDurumu || "loaded") === "loaded" ? "Total weight including cargo and container" : (editHareket.yukDurumu || "loaded") === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
-                </div>
-              </div>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: editErrors.konum ? "#dc2626" : "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
-                Location / Route{editErrors.konum && <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9 }}>⚠ {editErrors.konum}</span>}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>📍 Departure</div>
-                  <SuggestInput
-                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
-                    value={editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim() || ""}
-                    field="editFrom"
-                    placeholder="City, address or postcode"
-                    borderColor={editErrors.konum ? "#dc2626" : undefined}
-                    onChange={v => {
-                      const to = editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim() || "";
-                      setEditHareket(p => ({ ...p, konumFrom: v, konum: v && to ? v + " → " + to : v || to || "" }));
-                      setEditErrors(p => ({ ...p, konum: "" }));
-                    }}
-                    onSelect={(display, formatted) => {
-                      const to = editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim() || "";
-                      setEditHareket(p => ({ ...p, konumFrom: formatted, konum: formatted && to ? formatted + " → " + to : formatted || to || "" }));
-                    }}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>🏁 Destination</div>
-                  <SuggestInput
-                    suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
-                    value={editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim() || ""}
-                    field="editTo"
-                    placeholder="City, address or postcode"
-                    borderColor={editErrors.konum ? "#dc2626" : undefined}
-                    onChange={v => {
-                      const from = editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim() || "";
-                      setEditHareket(p => ({ ...p, konumTo: v, konum: from && v ? from + " → " + v : from || v || "" }));
-                      setEditErrors(p => ({ ...p, konum: "" }));
-                    }}
-                    onSelect={(display, formatted) => {
-                      const from = editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim() || "";
-                      setEditHareket(p => ({ ...p, konumTo: formatted, konum: from && formatted ? from + " → " + formatted : from || formatted || "" }));
-                    }}
-                  />
-                </div>
-              </div>
-              <button type="button" className="btn btn-primary" style={{ width: "100%", fontSize: 10, padding: "8px" }}
-                onClick={() => {
-                  const from = editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim() || "";
-                  const to = editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim() || "";
-                  calculateKm(from, to, (km) => setEditHareket(p => ({ ...p, km })));
-                }}
-                disabled={kmLoading || (!(editHareket.konumFrom || (editHareket.konum || "").split("→")[0]?.trim()) || !(editHareket.konumTo || (editHareket.konum || "").split("→")[1]?.trim()))}>
-                {kmLoading ? "⏳ Calculating..." : "📍 Calculate KM Automatically"}
-              </button>
-              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 6 }}>⚠ {kmError}</div>}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
-              {[["Reference", "referans", "Ref. no"], ["Note", "aciklama", "Note"]].map(([label, key, ph]) => (
-                <div key={key}>
-                  <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                  <input className="input" placeholder={ph} value={editHareket[key] || ""} onChange={e => setEditHareket(p => ({ ...p, [key]: e.target.value }))} />
-                </div>
-              ))}
               <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                  KM {kmLoading && <span style={{ color: "#3b82f6" }}>calculating...</span>}
+                <label className={LBL}>Container Load Status</label>
+                <div className="flex gap-2 mb-3">
+                  {[
+                    {val:"loaded",label:"📦 Loaded",active:"border-blue-500 bg-blue-50 text-blue-700"},
+                    {val:"empty",label:"⬜ Empty",active:"border-slate-400 bg-slate-50 text-slate-600"},
+                    {val:"chassis-only",label:"🚛 Chassis Only",active:"border-amber-500 bg-amber-50 text-amber-700"},
+                  ].map(opt=>(
+                    <button key={opt.val} type="button" onClick={()=>setEditHareket(p=>({...p,yukDurumu:opt.val}))}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${(editHareket.yukDurumu||"loaded")===opt.val?opt.active:"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{opt.label}</button>
+                  ))}
                 </div>
-                <input type="number" className="input" placeholder="or auto-calculate ↑" min="0"
-                  value={editHareket.km || ""}
-                  onChange={e => setEditHareket(p => ({ ...p, km: e.target.value }))}
-                  style={{ textAlign: "right", borderColor: kmLoading ? "#93c5fd" : undefined }} />
+                {(editHareket.yukDurumu||"loaded")==="chassis-only"&&(
+                  <input className={INP} placeholder="Note: Which container, where to go..." value={editHareket.yukNotu||""} onChange={e=>setEditHareket(p=>({...p,yukNotu:e.target.value}))} />
+                )}
+                <div className="mt-3">
+                  <label className={`${LBL} ${editErrors.kg?"text-red-500":""}`}>
+                    {(editHareket.yukDurumu||"loaded")==="loaded"?"📦 Cargo Weight (KG)":(editHareket.yukDurumu||"loaded")==="empty"?"⬜ Tare Weight (KG)":"🚛 Chassis Weight (KG)"} <span className="text-red-500">*</span>
+                    {editErrors.kg&&<span className="text-red-400 text-[10px] normal-case font-normal ml-1">⚠ {editErrors.kg}</span>}
+                  </label>
+                  <input type="number" className={`${INP} ${editErrors.kg?"border-red-400":""}`} min="0" style={{textAlign:"right"}}
+                    placeholder={(editHareket.yukDurumu||"loaded")==="loaded"?"e.g. 24000":(editHareket.yukDurumu||"loaded")==="empty"?"e.g. 2200":"e.g. 6500"}
+                    value={editHareket.kg||""} onChange={e=>{setEditHareket(p=>({...p,kg:e.target.value}));setEditErrors(p=>({...p,kg:""}));}} />
+                  <p className="text-xs text-slate-400 mt-1">{(editHareket.yukDurumu||"loaded")==="loaded"?"Total including cargo + container":(editHareket.yukDurumu||"loaded")==="empty"?"20FT≈2,200kg · 40FT≈3,800kg · 45FT≈4,500kg":"Standard chassis ≈ 6,000–8,000 kg"}</p>
+                </div>
               </div>
-            </div>
-            {/* EURO NORM + CO2 PREVIEW */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
-                🌍 Vehicle Standard (Euro Norm)
+              <div>
+                <label className={`${LBL} ${editErrors.konum?"text-red-500":""}`}>Location / Route{editErrors.konum&&<span className="text-red-400 text-[10px] normal-case font-normal ml-1">⚠ {editErrors.konum}</span>}</label>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">📍 Departure</div>
+                    <SuggestInput value={editHareket.konumFrom||(editHareket.konum||"").split("→")[0]?.trim()||""} field="editFrom" placeholder="City, street or postcode"
+                      hasError={!!editErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      onChange={v=>{const to=editHareket.konumTo||(editHareket.konum||"").split("→")[1]?.trim()||"";setEditHareket(p=>({...p,konumFrom:v,konum:v&&to?v+" → "+to:v||to||""}));setEditErrors(p=>({...p,konum:""}));}}
+                      onSelect={(_,fmt)=>{const to=editHareket.konumTo||(editHareket.konum||"").split("→")[1]?.trim()||"";setEditHareket(p=>({...p,konumFrom:fmt,konum:fmt&&to?fmt+" → "+to:fmt||to||""}));}} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">🏁 Destination</div>
+                    <SuggestInput value={editHareket.konumTo||(editHareket.konum||"").split("→")[1]?.trim()||""} field="editTo" placeholder="City, street or postcode"
+                      hasError={!!editErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      onChange={v=>{const from=editHareket.konumFrom||(editHareket.konum||"").split("→")[0]?.trim()||"";setEditHareket(p=>({...p,konumTo:v,konum:from&&v?from+" → "+v:from||v||""}));setEditErrors(p=>({...p,konum:""}));}}
+                      onSelect={(_,fmt)=>{const from=editHareket.konumFrom||(editHareket.konum||"").split("→")[0]?.trim()||"";setEditHareket(p=>({...p,konumTo:fmt,konum:from&&fmt?from+" → "+fmt:from||fmt||""}));}} />
+                  </div>
+                </div>
+                <button type="button" className={`${BTN_P} w-full`}
+                  onClick={()=>{const from=editHareket.konumFrom||(editHareket.konum||"").split("→")[0]?.trim()||"";const to=editHareket.konumTo||(editHareket.konum||"").split("→")[1]?.trim()||"";calculateKm(from,to,(km)=>setEditHareket(p=>({...p,km})));}}
+                  disabled={kmLoading||(!(editHareket.konumFrom||(editHareket.konum||"").split("→")[0]?.trim())||!(editHareket.konumTo||(editHareket.konum||"").split("→")[1]?.trim()))}>
+                  {kmLoading?"⏳ Calculating...":"📍 Calculate KM Automatically"}
+                </button>
+                {kmError&&<p className="text-red-500 text-xs mt-1.5">⚠ {kmError}</p>}
               </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.entries(EMISSION_FACTORS).map(([key, ef]) => (
-                  <button key={key} type="button"
-                    onClick={() => setEditHareket(p => ({ ...p, euronorm: key }))}
-                    style={{ padding: "6px 10px", borderRadius: 3, border: `2px solid ${(editHareket.euronorm || "euro6") === key ? ef.color : "#e2e8f0"}`, background: (editHareket.euronorm || "euro6") === key ? ef.bg : "#fff", color: (editHareket.euronorm || "euro6") === key ? ef.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                    {ef.label}
-                  </button>
+              <div className="grid grid-cols-3 gap-3">
+                {[["Reference","referans","Ref. no"],["Note","aciklama","Note"]].map(([l,k,ph])=>(
+                  <div key={k}>
+                    <label className={LBL}>{l}</label>
+                    <input className={INP} placeholder={ph} value={editHareket[k]||""} onChange={e=>setEditHareket(p=>({...p,[k]:e.target.value}))} />
+                  </div>
                 ))}
+                <div>
+                  <label className={LBL}>KM{kmLoading&&<span className="text-blue-400 text-[10px] ml-1 normal-case font-normal"> calculating...</span>}</label>
+                  <input type="number" className={INP} placeholder="auto-calculate ↑" min="0" value={editHareket.km||""} onChange={e=>setEditHareket(p=>({...p,km:e.target.value}))} style={{textAlign:"right"}} />
+                </div>
               </div>
-              {(() => {
-                const co2 = calcCO2(editHareket.km, editHareket.kg || selectedContainer?.kg, editHareket.euronorm || "euro6");
-                const ef = EMISSION_FACTORS[editHareket.euronorm || "euro6"] || EMISSION_FACTORS.euro6;
-                return co2 ? (
-                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, background: ef.bg, border: `1px solid ${ef.border}`, borderRadius: 4, padding: "8px 12px" }}>
-                    <span style={{ fontSize: 16 }}>🌿</span>
-                    <div>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 14, color: ef.color }}>{co2} kg CO₂</span>
-                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginLeft: 8 }}>estimated for this route</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 6, fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#cbd5e1" }}>
-                    Enter KM + weight (KG) to see CO₂ estimate
-                  </div>
-                );
-              })()}
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Date</div>
-              <input type="date" className="input" value={editHareket.tarih || ""} onChange={e => setEditHareket(p => ({ ...p, tarih: e.target.value }))} />
-            </div>
-            <div style={{ borderTop: "2px solid #e2e8f0", paddingTop: 16, marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 12, color: "#475569", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💰 Surcharges</div>
-              {editSurchargeLines.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                  {editSurchargeLines.map((sc, i) => {
-                    const tip = SURCHARGE_TIPLERI[sc.tip] || SURCHARGE_TIPLERI.diger;
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: tip.bg, border: `1px solid ${tip.border}`, borderRadius: 3, padding: "6px 10px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 600, color: tip.color }}>{tip.label}</span>
-                          {sc.aciklama && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#64748b" }}>{sc.aciklama}</span>}
-                          {sc.tip === "waiting" && sc.saat && <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8" }}>{sc.saat} saat × {Number(sc.saatUcreti).toLocaleString("en-US")} ₺</span>}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 13, color: tip.color }}>{Number(sc.tutar).toLocaleString("en-US")} ₺</span>
-                          <button onClick={() => setEditSurchargeLines(prev => prev.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 14 }}>✕</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ textAlign: "right", fontFamily: "'Roboto', sans-serif", fontSize: 12, fontWeight: 700, color: "#dc2626" }}>
-                    Total: {editSurchargeLines.reduce((s, sc) => s + (Number(sc.tutar) || 0), 0).toLocaleString("en-US")} ₺
-                  </div>
+              <div>
+                <label className={LBL}>🌍 Vehicle Standard (Euro Norm)</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(EMISSION_FACTORS).map(([k,ef])=>(
+                    <button key={k} type="button" onClick={()=>setEditHareket(p=>({...p,euronorm:k}))}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all"
+                      style={{borderColor:(editHareket.euronorm||"euro6")===k?ef.color:"#e2e8f0",background:(editHareket.euronorm||"euro6")===k?ef.bg:"#fff",color:(editHareket.euronorm||"euro6")===k?ef.color:"#94a3b8"}}>{ef.label}</button>
+                  ))}
                 </div>
-              )}
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, padding: 12 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Add New Item</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Tip</div>
-                    <select className="input" value={editNewSurcharge.tip} onChange={e => setEditNewSurcharge(p => ({ ...p, tip: e.target.value, saat: "", saatUcreti: "", tutar: "" }))} style={{ cursor: "pointer" }}>
-                      {Object.entries(SURCHARGE_TIPLERI).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Description</div>
-                    <input className="input" placeholder="optional" value={editNewSurcharge.aciklama} onChange={e => setEditNewSurcharge(p => ({ ...p, aciklama: e.target.value }))} />
-                  </div>
-                </div>
-                {editNewSurcharge.tip === "bekleme" ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Time (Saat)</div>
-                      <input type="number" className="input" placeholder="2" min="0" value={editNewSurcharge.saat}
-                        onChange={e => { const saat = e.target.value; setEditNewSurcharge(p => ({ ...p, saat, tutar: (Number(saat) * Number(p.saatUcreti)) || "" })); }} style={{ textAlign: "right" }} />
+                {(()=>{
+                  const co2=calcCO2(editHareket.km,editHareket.kg||selectedContainer?.kg,editHareket.euronorm||"euro6");
+                  const ef=EMISSION_FACTORS[editHareket.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
+                  return co2?(
+                    <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{background:ef.bg,border:`1px solid ${ef.border}`}}>
+                      <span className="text-lg">🌿</span>
+                      <span className="text-base font-black" style={{color:ef.color}}>{co2} kg CO₂</span>
+                      <span className="text-xs text-slate-400">estimated for this route</span>
                     </div>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Hourly Rate (₺)</div>
-                      <input type="number" className="input" placeholder="500" min="0" value={editNewSurcharge.saatUcreti}
-                        onChange={e => { const saatUcreti = e.target.value; setEditNewSurcharge(p => ({ ...p, saatUcreti, tutar: (Number(p.saat) * Number(saatUcreti)) || "" })); }} style={{ textAlign: "right" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#d97706", textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 4 }}>Calculated ₺</div>
-                      <input type="number" className="input" value={editNewSurcharge.tutar} readOnly style={{ textAlign: "right", background: "#fef3c7", borderColor: "#fcd34d", fontWeight: 700, color: "#d97706" }} />
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Amount (₺)</div>
-                    <input type="number" className="input" placeholder="e.g. 1500" min="0" value={editNewSurcharge.tutar} onChange={e => setEditNewSurcharge(p => ({ ...p, tutar: e.target.value }))} style={{ textAlign: "right" }} />
+                  ):<p className="text-xs text-slate-300">Enter KM + weight to see CO₂ estimate</p>;
+                })()}
+              </div>
+              <div>
+                <label className={LBL}>Date</label>
+                <input type="date" className={INP} value={editHareket.tarih||""} onChange={e=>setEditHareket(p=>({...p,tarih:e.target.value}))} />
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <label className={LBL}>💰 Surcharges</label>
+                {editSurchargeLines.length>0&&(
+                  <div className="space-y-2 mb-3">
+                    {editSurchargeLines.map((sc,i)=>{
+                      const tip=SURCHARGE_TIPLERI[sc.tip]||SURCHARGE_TIPLERI.diger;
+                      return(
+                        <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2" style={{background:tip.bg,border:`1px solid ${tip.border}`}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold" style={{color:tip.color}}>{tip.label}</span>
+                            {sc.aciklama&&<span className="text-xs text-slate-500">{sc.aciklama}</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black" style={{color:tip.color}}>{Number(sc.tutar).toLocaleString()} ₺</span>
+                            <button onClick={()=>setEditSurchargeLines(p=>p.filter((_,idx)=>idx!==i))} className="text-slate-400 hover:text-red-500 text-lg leading-none">×</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="text-right text-sm font-black text-red-500">Total: {editSurchargeLines.reduce((s,sc)=>s+(Number(sc.tutar)||0),0).toLocaleString()} ₺</div>
                   </div>
                 )}
-                <button className="btn btn-primary" style={{ width: "100%", fontSize: 12 }}
-                  onClick={() => {
-                    if (!editNewSurcharge.tutar || Number(editNewSurcharge.tutar) <= 0) return;
-                    setEditSurchargeLines(prev => [...prev, { ...editNewSurcharge }]);
-                    setEditNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
-                  }}>+ Add Item to List</button>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveEditHareket}>💾 Save Changes</button>
-              <button className="btn btn-ghost" onClick={() => { setEditHareketIdx(null); setEditHareket(null); setEditSurchargeLines([]); setEditErrors({}); }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Chassis Düzenle */}
-      {editChassis && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#d97706", textTransform: "uppercase", marginBottom: 20 }}>✏ Edit Chassis</div>
-            {[["Chassis No", "chassisNo", "CHS-001"], ["Plate No", "plakaNo", "34 ABC 001"]].map(([label, key, ph]) => (
-              <div key={key} style={{ marginBottom: 14 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                <input className="input" placeholder={ph} value={editChassis[key]} onChange={e => setEditChassis(p => ({ ...p, [key]: e.target.value }))} />
-              </div>
-            ))}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Chassis Type <span style={{ color: "#94a3b8", textTransform: "none", fontWeight: 400, fontSize: 10 }}>(multi-select)</span></div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {["20FT", "40FT", "45FT"].map(t => {
-                  const arr = Array.isArray(editChassis.tip) ? editChassis.tip : (editChassis.tip ? [editChassis.tip] : []);
-                  const sel = arr.includes(t);
-                  return (
-                    <button key={t} onClick={() => setEditChassis(p => {
-                      const cur = Array.isArray(p.tip) ? p.tip : (p.tip ? [p.tip] : []);
-                      return { ...p, tip: sel ? cur.filter(x => x !== t) : [...cur, t] };
-                    })}
-                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, border: `2px solid ${sel ? "#1d6abf" : "#e2e8f0"}`, background: sel ? "#dbeafe" : "#fff", color: sel ? "#1d6abf" : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
-              {(Array.isArray(editChassis.tip) ? editChassis.tip : []).length === 0 && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>Select at least one type</div>}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveEditChassis}>Save</button>
-              <button className="btn btn-ghost" onClick={() => setEditChassis(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Chassis Ekle */}
-      {showAddChassis && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase", marginBottom: 20 }}>Define New Chassis</div>
-            {[["Chassis No", "chassisNo", "CHS-001"], ["Plate No", "plakaNo", "34 ABC 001"]].map(([label, key, ph]) => (
-              <div key={key} style={{ marginBottom: 14 }}>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                <input className="input" placeholder={ph} value={newChassis[key]} onChange={e => setNewChassis(p => ({ ...p, [key]: e.target.value }))} />
-              </div>
-            ))}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Chassis Type <span style={{ color: "#94a3b8", textTransform: "none", fontWeight: 400, fontSize: 10 }}>(multi-select)</span></div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {["20FT", "40FT", "45FT"].map(t => {
-                  const sel = newChassis.tip.includes(t);
-                  return (
-                    <button key={t} onClick={() => setNewChassis(p => ({ ...p, tip: sel ? p.tip.filter(x => x !== t) : [...p.tip, t] }))}
-                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, border: `2px solid ${sel ? "#1d6abf" : "#e2e8f0"}`, background: sel ? "#dbeafe" : "#fff", color: sel ? "#1d6abf" : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
-              {newChassis.tip.length === 0 && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>Select at least one type</div>}
-            </div>
-            <div style={{ marginBottom: 20, background: "#f0f4f8", border: "1px solid #e2e8f0", borderRadius: 3, padding: "10px 12px" }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#64748b" }}>
-                New chassis is automatically set to <span style={{ color: "#059669" }}>Available</span> status. When assigned to a container, it switches to <span style={{ color: "#d97706" }}>In Use</span>.
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddChassis}>Save</button>
-              <button className="btn btn-ghost" onClick={() => setShowAddChassis(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Onay Dialogu */}
-      {confirmDialog && (
-        <div className="modal-overlay" style={{ zIndex: 200 }}>
-          <div className="modal" style={{ width: 400 }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 16, color: "#dc2626", marginBottom: 12 }}>
-              ⚠ {confirmDialog.title}
-            </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 13, color: "#475569", marginBottom: 24, lineHeight: 1.6 }}>
-              {confirmDialog.message}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-danger" style={{ flex: 1 }} onClick={confirmDialog.onConfirm}>Evet, Sil</button>
-              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setConfirmDialog(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Forecast → Container Önizleme */}
-      {forecastPreview && (
-        <div className="modal-overlay" style={{ zIndex: 200 }}>
-          <div className="modal" style={{ width: 500, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 16, color: "#059669", marginBottom: 4 }}>
-              Process Container
-            </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>
-              Review the details below and select a chassis to confirm.
-            </div>
-
-            {/* Forecast bilgileri - readonly */}
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, padding: "12px 16px", marginBottom: 16 }}>
-              {[
-                ["Container No", forecastPreview.containerNo],
-                ["Customer", forecastPreview.musteri],
-                ["Port", forecastPreview.liman || "—"],
-                ["Container Type", forecastPreview.containerType || "20FT"],
-                ["Cargo (KG)", forecastPreview.kg ? `${Number(forecastPreview.kg).toLocaleString("en-US")} kg` : "—"],
-                ["ADR", forecastPreview.adr ? "⚠ Yes" : "No"],
-              ].map(([label, val]) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #f1f5f9" }}>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
-                  <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 11, fontWeight: 600, color: label === "ADR" && forecastPreview.adr ? "#dc2626" : "#1e293b" }}>{val}</span>
+                <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Add Surcharge Item</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={LBL}>Type</label>
+                      <select className={`${INP} cursor-pointer`} value={editNewSurcharge.tip} onChange={e=>setEditNewSurcharge(p=>({...p,tip:e.target.value,saat:"",saatUcreti:"",tutar:""}))}>
+                        {Object.entries(SURCHARGE_TIPLERI).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={LBL}>Description</label>
+                      <input className={INP} placeholder="optional" value={editNewSurcharge.aciklama} onChange={e=>setEditNewSurcharge(p=>({...p,aciklama:e.target.value}))} />
+                    </div>
+                  </div>
+                  {editNewSurcharge.tip==="waiting"?(
+                    <div className="grid grid-cols-3 gap-2">
+                      <div><label className={LBL}>Hours</label><input type="number" className={INP} placeholder="2" min="0" value={editNewSurcharge.saat} onChange={e=>{const s=e.target.value;setEditNewSurcharge(p=>({...p,saat:s,tutar:(Number(s)*Number(p.saatUcreti))||""}))}} style={{textAlign:"right"}} /></div>
+                      <div><label className={LBL}>Rate (₺)</label><input type="number" className={INP} placeholder="500" min="0" value={editNewSurcharge.saatUcreti} onChange={e=>{const su=e.target.value;setEditNewSurcharge(p=>({...p,saatUcreti:su,tutar:(Number(p.saat)*Number(su))||""}))}} style={{textAlign:"right"}} /></div>
+                      <div><label className="block text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1.5">Calculated ₺</label><input type="number" className={INP} value={editNewSurcharge.tutar} readOnly style={{textAlign:"right",background:"#fef3c7",borderColor:"#fcd34d",fontWeight:700,color:"#d97706"}} /></div>
+                    </div>
+                  ):(
+                    <div><label className={LBL}>Amount (₺)</label><input type="number" className={INP} placeholder="e.g. 1500" min="0" value={editNewSurcharge.tutar} onChange={e=>setEditNewSurcharge(p=>({...p,tutar:e.target.value}))} style={{textAlign:"right"}} /></div>
+                  )}
+                  <button className={`${BTN_P} w-full`} onClick={()=>{if(!editNewSurcharge.tutar||Number(editNewSurcharge.tutar)<=0)return;setEditSurchargeLines(p=>[...p,{...editNewSurcharge}]);setEditNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>+ Add Item to List</button>
                 </div>
-              ))}
-            </div>
-
-            {/* Chassis seçimi — zorunlu */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
-                Select Chassis <span style={{ color: "#dc2626" }}>*</span>
               </div>
-              <select className="input" value={forecastPreview.chassisNo || ""}
-                onChange={e => { setForecastPreview(p => ({ ...p, chassisNo: e.target.value })); setForecastPreviewError(""); }}
-                style={{ cursor: "pointer", borderColor: forecastPreviewError ? "#dc2626" : undefined }}>
-                <option value="">— Chassis seçin —</option>
-                {musaitChassis.map(ch => (
-                  <option key={ch.id} value={ch.chassisNo}>{ch.chassisNo} · {ch.plakaNo} · {Array.isArray(ch.tip) ? ch.tip.join(", ") : (ch.tip || "")}</option>
-                ))}
-              </select>
-              {forecastPreviewError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {forecastPreviewError}</div>}
             </div>
-
-            {/* Liman çıkış tarihi */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Port Departure Date</div>
-              <input type="date" className="input" value={forecastPreview.limanCikis || today()}
-                onChange={e => setForecastPreview(p => ({ ...p, limanCikis: e.target.value }))} />
-            </div>
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="btn btn-success" style={{ flex: 1 }} onClick={handleConfirmForecastToContainer}>Confirm and Process</button>
-              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setForecastPreview(null); setForecastPreviewError(""); }}>Cancel</button>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button className={`${BTN_P} flex-1`} onClick={handleSaveEditHareket}>💾 Save Changes</button>
+              <button className={BTN_G} onClick={()=>{setEditHareketIdx(null);setEditHareket(null);setEditSurchargeLines([]);setEditErrors({});}}>Cancel</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL: Edit Chassis */}
+      {editChassis && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl shadow-2xl p-6">
+            <h2 className="text-base font-bold text-amber-600 mb-5">✏ Edit Chassis</h2>
+            {[["Chassis No","chassisNo","CHS-001"],["Plate No","plakaNo","34 ABC 001"]].map(([l,k,ph])=>(
+              <div key={k} className="mb-4">
+                <label className={LBL}>{l}</label>
+                <input className={INP} placeholder={ph} value={editChassis[k]} onChange={e=>setEditChassis(p=>({...p,[k]:e.target.value}))} />
+              </div>
+            ))}
+            <div className="mb-5">
+              <label className={LBL}>Chassis Type <span className="text-slate-400 text-[10px] normal-case font-normal">(multi-select)</span></label>
+              <div className="flex gap-2">
+                {["20FT","40FT","45FT"].map(t=>{
+                  const arr=Array.isArray(editChassis.tip)?editChassis.tip:(editChassis.tip?[editChassis.tip]:[]);
+                  const sel=arr.includes(t);
+                  return(
+                    <button key={t} type="button"
+                      onClick={()=>setEditChassis(p=>{const cur=Array.isArray(p.tip)?p.tip:(p.tip?[p.tip]:[]);return{...p,tip:sel?cur.filter(x=>x!==t):[...cur,t]};})}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${sel?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{t}</button>
+                  );
+                })}
+              </div>
+              {(Array.isArray(editChassis.tip)?editChassis.tip:[]).length===0&&<p className="text-red-500 text-xs mt-1.5">Select at least one type</p>}
+            </div>
+            <div className="flex gap-3">
+              <button className={`${BTN_P} flex-1`} onClick={handleSaveEditChassis}>Save</button>
+              <button className={BTN_G} onClick={()=>setEditChassis(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Add Chassis */}
+      {showAddChassis && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl shadow-2xl p-6">
+            <h2 className="text-base font-bold text-blue-600 mb-5">Define New Chassis</h2>
+            {[["Chassis No","chassisNo","CHS-001"],["Plate No","plakaNo","34 ABC 001"]].map(([l,k,ph])=>(
+              <div key={k} className="mb-4">
+                <label className={LBL}>{l}</label>
+                <input className={INP} placeholder={ph} value={newChassis[k]} onChange={e=>setNewChassis(p=>({...p,[k]:e.target.value}))} />
+              </div>
+            ))}
+            <div className="mb-5">
+              <label className={LBL}>Chassis Type <span className="text-slate-400 text-[10px] normal-case font-normal">(multi-select)</span></label>
+              <div className="flex gap-2">
+                {["20FT","40FT","45FT"].map(t=>{
+                  const sel=newChassis.tip.includes(t);
+                  return(
+                    <button key={t} type="button" onClick={()=>setNewChassis(p=>({...p,tip:sel?p.tip.filter(x=>x!==t):[...p.tip,t]}))}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-lg border-2 transition-all ${sel?"border-blue-500 bg-blue-50 text-blue-700":"border-slate-200 text-slate-400 hover:border-slate-300"}`}>{t}</button>
+                  );
+                })}
+              </div>
+              {newChassis.tip.length===0&&<p className="text-red-500 text-xs mt-1.5">Select at least one type</p>}
+            </div>
+            <div className="bg-blue-50 rounded-lg p-3 mb-5 text-xs text-blue-500 border border-blue-200">
+              New chassis is automatically set to <strong>Available</strong>. Switches to <strong>In Use</strong> when assigned to a container.
+            </div>
+            <div className="flex gap-3">
+              <button className={`${BTN_P} flex-1`} onClick={handleAddChassis}>Save</button>
+              <button className={BTN_G} onClick={()=>setShowAddChassis(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="text-base font-bold text-red-600 mb-3">⚠ {confirmDialog.title}</div>
+            <div className="text-sm text-slate-500 mb-6 leading-relaxed">{confirmDialog.message}</div>
+            <div className="flex gap-3">
+              <button className={`${BTN_D} flex-1`} onClick={confirmDialog.onConfirm}>Yes, Delete</button>
+              <button className={`${BTN_G} flex-1`} onClick={()=>setConfirmDialog(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Forecast → Container Preview */}
+      {forecastPreview && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-emerald-600">Process Container</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Review details and select chassis to confirm.</p>
+              </div>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setForecastPreview(null);setForecastPreviewError("");}}>×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                {[["Container No",forecastPreview.containerNo],["Customer",forecastPreview.musteri],["Port",forecastPreview.liman||"—"],["Container Type",forecastPreview.containerType||"20FT"],["Cargo (KG)",forecastPreview.kg?`${Number(forecastPreview.kg).toLocaleString()} kg`:"—"],["ADR",forecastPreview.adr?"⚠ Yes":"No"]].map(([l,v])=>(
+                  <div key={l} className="flex justify-between py-2 border-b border-slate-100 last:border-0">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{l}</span>
+                    <span className={`text-xs font-bold ${l==="ADR"&&forecastPreview.adr?"text-red-600":"text-slate-700"}`}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className={LBL}>Select Chassis <span className="text-red-500">*</span></label>
+                <select className={`${INP} cursor-pointer ${forecastPreviewError?"border-red-400":""}`} value={forecastPreview.chassisNo||""}
+                  onChange={e=>{setForecastPreview(p=>({...p,chassisNo:e.target.value}));setForecastPreviewError("");}}>
+                  <option value="">— Select chassis —</option>
+                  {musaitChassis.map(ch=>(
+                    <option key={ch.id} value={ch.chassisNo}>{ch.chassisNo} · {ch.plakaNo} · {Array.isArray(ch.tip)?ch.tip.join(", "):(ch.tip||"")}</option>
+                  ))}
+                </select>
+                {forecastPreviewError&&<p className="text-red-500 text-xs mt-1.5">⚠ {forecastPreviewError}</p>}
+              </div>
+              <div>
+                <label className={LBL}>Port Departure Date</label>
+                <input type="date" className={INP} value={forecastPreview.limanCikis||today()} onChange={e=>setForecastPreview(p=>({...p,limanCikis:e.target.value}))} />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <button className={`${BTN_S} flex-1`} onClick={handleConfirmForecastToContainer}>Confirm and Process</button>
+              <button className={BTN_G} onClick={()=>{setForecastPreview(null);setForecastPreviewError("");}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
