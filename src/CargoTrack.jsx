@@ -705,9 +705,9 @@ export default function App({ currentUser, onLogout }) {
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ padding: "12px 0" }}>
             <div style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 900, fontSize: 20, letterSpacing: 3, color: "#1d6abf", textTransform: "uppercase" }}>
-              Ned<span style={{ color: "#1e293b" }}>Line</span>
+              ⬡ CARGO<span style={{ color: "#1e293b" }}>TRACK</span>
             </div>
-            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 8, color: "#64748b", letterSpacing: 2 }}>CONTAINER PLANNING</div>
+            <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 8, color: "#64748b", letterSpacing: 2 }}>CONTAINER PLANNING SYSTEM</div>
           </div>
           {/* Desktop Nav */}
           <nav className="desktop-only" style={{ gap: 2, marginLeft: 8 }}>
@@ -1756,12 +1756,40 @@ export default function App({ currentUser, onLogout }) {
                 ))}
               </div>
               {(editHareket.yukDurumu || "loaded") === "chassis-only" && (
-                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={editHareket.yukNotu || ""} onChange={e => setEditHareket(p => ({ ...p, yukNotu: e.target.value }))} />
+                <input className="input" placeholder="Note: Which container to pick up, where to go..." value={editHareket.yukNotu || ""} onChange={e => setEditHareket(p => ({ ...p, yukNotu: e.target.value }))} style={{ marginTop: 8 }} />
               )}
+              {/* KG — mandatory */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
+                  {(editHareket.yukDurumu || "loaded") === "loaded" ? "📦 Cargo Weight (KG)" : (editHareket.yukDurumu || "loaded") === "empty" ? "⬜ Tare Weight (KG)" : "🚛 Chassis Weight (KG)"}
+                  {" "}<span style={{ color: "#dc2626" }}>*</span>
+                </div>
+                <input type="number" className="input" min="0"
+                  placeholder={(editHareket.yukDurumu || "loaded") === "loaded" ? "e.g. 24000 (cargo + container)" : (editHareket.yukDurumu || "loaded") === "empty" ? "e.g. 2200 (empty container)" : "e.g. 6500 (chassis only)"}
+                  value={editHareket.kg || ""}
+                  onChange={e => setEditHareket(p => ({ ...p, kg: e.target.value }))}
+                  style={{ textAlign: "right" }} />
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 3 }}>
+                  {(editHareket.yukDurumu || "loaded") === "loaded" ? "Total weight including cargo and container" : (editHareket.yukDurumu || "loaded") === "empty" ? "20FT ≈ 2,200 kg · 40FT ≈ 3,800 kg · 45FT ≈ 4,500 kg" : "Standard chassis ≈ 6,000–8,000 kg"}
+                </div>
+              </div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Location / Route</div>
-              <input className="input" placeholder="Start → Destination" value={editHareket.konum || ""} onChange={e => setEditHareket(p => ({ ...p, konum: e.target.value }))} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input" placeholder="Start → Destination" value={editHareket.konum || ""}
+                  onChange={e => { setEditHareket(p => ({ ...p, konum: e.target.value })); setKmError(""); }} />
+                <button type="button" className="btn btn-primary" style={{ whiteSpace: "nowrap", fontSize: 10, padding: "8px 12px", flexShrink: 0 }}
+                  onClick={() => calculateKm(editHareket.konum || "", (km) => setEditHareket(p => ({ ...p, km })))}
+                  disabled={kmLoading || !(editHareket.konum || "").includes("→")}
+                  title="Auto-calculate KM">
+                  {kmLoading ? "⏳" : "📍 Calculate KM"}
+                </button>
+              </div>
+              {kmError && <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠ {kmError}</div>}
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#94a3b8", marginTop: 4 }}>
+                Enter as "Start → Destination" then click Calculate KM
+              </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[["Reference", "referans", "Ref. no"], ["Note", "aciklama", "Note"]].map(([label, key, ph]) => (
@@ -1771,9 +1799,46 @@ export default function App({ currentUser, onLogout }) {
                 </div>
               ))}
               <div>
-                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>KM</div>
-                <input type="number" className="input" placeholder="120" min="0" value={editHareket.km || ""} onChange={e => setEditHareket(p => ({ ...p, km: e.target.value }))} style={{ textAlign: "right" }} />
+                <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>
+                  KM {kmLoading && <span style={{ color: "#3b82f6" }}>calculating...</span>}
+                </div>
+                <input type="number" className="input" placeholder="or auto-calculate ↑" min="0"
+                  value={editHareket.km || ""}
+                  onChange={e => setEditHareket(p => ({ ...p, km: e.target.value }))}
+                  style={{ textAlign: "right", borderColor: kmLoading ? "#93c5fd" : undefined }} />
               </div>
+            </div>
+            {/* EURO NORM + CO2 PREVIEW */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
+                🌍 Vehicle Standard (Euro Norm)
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(EMISSION_FACTORS).map(([key, ef]) => (
+                  <button key={key} type="button"
+                    onClick={() => setEditHareket(p => ({ ...p, euronorm: key }))}
+                    style={{ padding: "6px 10px", borderRadius: 3, border: `2px solid ${(editHareket.euronorm || "euro6") === key ? ef.color : "#e2e8f0"}`, background: (editHareket.euronorm || "euro6") === key ? ef.bg : "#fff", color: (editHareket.euronorm || "euro6") === key ? ef.color : "#94a3b8", fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                    {ef.label}
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const co2 = calcCO2(editHareket.km, editHareket.kg || selectedContainer?.kg, editHareket.euronorm || "euro6");
+                const ef = EMISSION_FACTORS[editHareket.euronorm || "euro6"] || EMISSION_FACTORS.euro6;
+                return co2 ? (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, background: ef.bg, border: `1px solid ${ef.border}`, borderRadius: 4, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 16 }}>🌿</span>
+                    <div>
+                      <span style={{ fontFamily: "'Roboto', sans-serif", fontWeight: 700, fontSize: 14, color: ef.color }}>{co2} kg CO₂</span>
+                      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, color: "#94a3b8", marginLeft: 8 }}>estimated for this route</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 6, fontFamily: "'Roboto', sans-serif", fontSize: 9, color: "#cbd5e1" }}>
+                    Enter KM + weight (KG) to see CO₂ estimate
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontFamily: "'Roboto', sans-serif", fontSize: 10, fontWeight: 600, letterSpacing: 1, color: "#64748b", textTransform: "uppercase", marginBottom: 5 }}>Date</div>
