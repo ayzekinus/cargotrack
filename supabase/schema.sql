@@ -14,7 +14,7 @@ create table if not exists chassis (
 -- ── CONTAINERS ──────────────────────────────────────────────
 create table if not exists containers (
   id               text primary key,
-  container_no     text not null unique,
+  container_no     text not null,
   chassis_no       text not null,
   musteri          text not null,
   liman_cikis      date not null,
@@ -93,3 +93,9 @@ alter table hareketler add column if not exists euronorm text default 'euro6';
 
 -- ── MIGRATION: Mevcut veritabanına kg kolonu ekle ────────────
 alter table hareketler add column if not exists kg numeric;
+
+-- ── MIGRATION: container_no UNIQUE kısıtlamasını kaldır ───────
+-- Aynı fiziksel container'ın birden fazla sefer kaydedilebilmesi için
+-- container_no artık benzersiz OLMAK ZORUNDA DEĞİL. Mevcut veritabanında
+-- bu komutu SQL Editor'da bir kez çalıştırın:
+alter table containers drop constraint if exists containers_container_no_key;
