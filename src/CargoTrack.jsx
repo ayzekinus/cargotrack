@@ -552,6 +552,12 @@ export default function App({ currentUser, onLogout }) {
       setContainerFormError("Chassis selection is required.");
       return;
     }
+    // Aynı container numarası hâlâ açık (aktif) bir sefere aitse engelle.
+    // Kapalı seferler için aynı numara tekrar kaydedilebilir.
+    if (containers.some(c => c.containerNo === newContainer.containerNo && c.durum === "active")) {
+      setContainerFormError("Bu container numarası şu anda açık bir seferde kayıtlı. Yeni sefer eklemek için önce mevcut seferi kapatın.");
+      return;
+    }
     const id = nextId("CNT", containers);
     const { error: cErr } = await supabase.from("containers").insert({
       id,
