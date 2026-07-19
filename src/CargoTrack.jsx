@@ -525,6 +525,39 @@ export default function App({ currentUser, onLogout }) {
     downloadCSV(rows, headers, `containerlar_${today()}.csv`);
   };
 
+  // Detay ekranındaki tek bir container'ın TÜM movement'larını Excel'e (CSV) aktarır.
+  // ÖNEMLİ: c.hareketler dizisi ekranda göründüğü sırayla yazılır — yeniden
+  // sıralama yapılmaz, böylece eklenme sırası korunur (sıralama bozulmaz).
+  const exportContainerDetailCSV = (cont) => {
+    const c = cont || selectedContainer;
+    if (!c) return;
+    const headers = ["#","Date","Location/Route","Driver","Company","Reference","Load Status","Weight (kg)","Route KM","Cumulative KM","Euro Norm","CO2 (kg)","Surcharge (TL)","Description","Load Note"];
+    let cumKm = 0;
+    const rows = c.hareketler.map((h, i) => {
+      const rowKm = Number(h.km) || 0;
+      cumKm += rowKm;
+      return [
+        i + 1,
+        h.tarih,
+        h.konum || "",
+        h.surucu || "",
+        h.firma || "",
+        h.referans || "",
+        h.yukDurumu || "loaded",
+        h.kg || "",
+        rowKm,
+        cumKm,
+        h.euronorm || "euro6",
+        calcCO2(h.km, h.kg || c.kg, h.euronorm) || 0,
+        (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0),
+        h.aciklama || "",
+        h.yukNotu || "",
+      ];
+    });
+    const safeNo = String(c.containerNo || "container").replace(/[^\w.-]+/g, "_");
+    downloadCSV(rows, headers, `container_${safeNo}_${today()}.csv`);
+  };
+
   const exportPDF = (type) => {
     const w = window.open("", "_blank");
     const style = `<style>body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:20px}h2{font-size:15px;color:#1d6abf;margin-bottom:4px}p{color:#64748b;font-size:10px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:1px;padding:7px 10px;border:1px solid #e2e8f0;text-align:left}td{padding:7px 10px;border:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}.badge{padding:2px 8px;border-radius:2px;font-weight:700;font-size:9px}.aktif{background:#d1fae5;color:#059669}.kapali{background:#f1f5f9;color:#94a3b8}@media print{body{padding:0}</style>`;
@@ -1270,6 +1303,7 @@ export default function App({ currentUser, onLogout }) {
                     <p className="text-xs text-slate-400 uppercase tracking-wide">{c.musteri}</p>
                   </div>
                   <div className="ml-auto flex gap-2">
+                    <button className="border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors" onClick={()=>exportContainerDetailCSV(c)}>⬇ Excel</button>
                     {c.durum === "active" && (
                       <>
                         <button className={BTN_P} onClick={()=>setShowAddHareket(true)}>+ Add Movement</button>
@@ -1312,8 +1346,25 @@ export default function App({ currentUser, onLogout }) {
                   <div className="px-5 py-4 border-b border-slate-100">
                     <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Movement History</h3>
                   </div>
-                  <div className="divide-y divide-slate-50">
-                    {c.hareketler.map((h,i)=>{
+                  <div>
+                    {(()=>{
+                      // Movement'ları güne göre grupla — dizideki sıra korunur (sıralama bozulmaz).
+                      const groups=[]; const gIdx={};
+                      c.hareketler.forEach((h,i)=>{
+                        const key=h.tarih||"—";
+                        if(!(key in gIdx)){gIdx[key]=groups.length;groups.push({tarih:key,items:[]});}
+                        groups[gIdx[key]].items.push({h,i});
+                      });
+                      return groups.map((g)=>{
+                        const dayKm=g.items.reduce((s,it)=>s+(Number(it.h.km)||0),0);
+                        return (
+                          <div key={g.tarih} className="border-b border-slate-100 last:border-b-0">
+                            <div className="px-5 py-2.5 bg-slate-50 flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-500">📅 {g.tarih} · {g.items.length} movement</span>
+                              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Günlük toplam: {dayKm.toLocaleString()} km</span>
+                            </div>
+                            <div className="divide-y divide-slate-50">
+                              {g.items.map(({h,i})=>{
                       const rowKm = Number(h.km)||0;
                       const kmAtPoint = c.hareketler.slice(0,i+1).reduce((s,x)=>s+(Number(x.km)||0),0);
                       const co2h = calcCO2(h.km, h.kg||c.kg, h.euronorm);
@@ -1373,7 +1424,12 @@ export default function App({ currentUser, onLogout }) {
                           )}
                         </div>
                       );
-                    })}
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               </div>
