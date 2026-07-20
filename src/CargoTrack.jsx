@@ -115,6 +115,7 @@ export default function App({ currentUser, onLogout }) {
   const [showAddForecast, setShowAddForecast] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDurum, setFilterDurum] = useState("all");
+  const [containerTarih, setContainerTarih] = useState({ tarihBas: "", tarihBit: "" });
   const [hareketFilter, setHareketFilter] = useState({ containerNo: "", surucu: "", tarihBas: "", tarihBit: "" });
   const [forecastFilter, setForecastFilter] = useState({ containerNo: "", musteri: "", tarihBas: "", tarihBit: "" });
   const [confirmDialog, setConfirmDialog] = useState(null); // { title, message, onConfirm }
@@ -405,9 +406,17 @@ export default function App({ currentUser, onLogout }) {
         c.musteri.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.chassisNo.toLowerCase().includes(searchTerm.toLowerCase());
       const matchDurum = filterDurum === "all" || c.durum === filterDurum;
-      return matchSearch && matchDurum;
+      // Tarih filtresi (Movements ile aynı mantık): container'ın faaliyet dönemi
+      // [çıkış, dönüş||bugün] seçilen aralıkla kesişiyorsa göster. Devam eden
+      // (dönüşü olmayan) container'lar bugüne kadar aktif sayılır.
+      const cStart = c.limanCikis || "";
+      const cEnd = c.limanGiris || today();
+      const matchTarih =
+        (!containerTarih.tarihBas || cEnd >= containerTarih.tarihBas) &&
+        (!containerTarih.tarihBit || cStart <= containerTarih.tarihBit);
+      return matchSearch && matchDurum && matchTarih;
     });
-  }, [containers, searchTerm, filterDurum]);
+  }, [containers, searchTerm, filterDurum, containerTarih]);
 
   const filteredForecast = useMemo(() => {
     return [...forecastList].filter(fc => {
@@ -1086,7 +1095,21 @@ export default function App({ currentUser, onLogout }) {
                       className={`text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${filterDurum===v ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{l}</button>
                   ))}
                 </div>
-                <div className="ml-auto flex gap-2">
+                <div className="flex gap-2 items-end">
+                  <div className="min-w-32">
+                    <label className={LBL}>Start Date</label>
+                    <input type="date" className={INP} value={containerTarih.tarihBas} onChange={e => setContainerTarih(p => ({...p, tarihBas: e.target.value}))} />
+                  </div>
+                  <div className="min-w-32">
+                    <label className={LBL}>End Date</label>
+                    <input type="date" className={INP} value={containerTarih.tarihBit} onChange={e => setContainerTarih(p => ({...p, tarihBit: e.target.value}))} />
+                  </div>
+                  {(containerTarih.tarihBas || containerTarih.tarihBit) && (
+                    <button className={BTN_G} onClick={() => setContainerTarih({tarihBas:"", tarihBit:""})}>✕ Clear</button>
+                  )}
+                </div>
+                <div className="ml-auto flex gap-2 items-center">
+                  <span className="text-xs text-slate-400">{filteredContainers.length} container</span>
                   <button className={BTN_P} onClick={() => setShowAddContainer(true)}>+ Add</button>
                   <button className="border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors" onClick={exportContainersCSV}>⬇ Excel</button>
                   <button className="border border-red-200 text-red-500 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition-colors" onClick={() => exportPDF("containers")}>⊡ PDF</button>
