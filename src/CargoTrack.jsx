@@ -117,6 +117,7 @@ export default function App({ currentUser, onLogout }) {
   const [filterDurum, setFilterDurum] = useState("all");
   const [containerTarih, setContainerTarih] = useState({ tarihBas: "", tarihBit: "" });
   const [hareketFilter, setHareketFilter] = useState({ containerNo: "", surucu: "", tarihBas: "", tarihBit: "" });
+  const [hareketGorunum, setHareketGorunum] = useState("liste"); // "liste" | "sofor"
   const [forecastFilter, setForecastFilter] = useState({ containerNo: "", musteri: "", tarihBas: "", tarihBit: "" });
   const [confirmDialog, setConfirmDialog] = useState(null); // { title, message, onConfirm }
   const [forecastPreview, setForecastPreview] = useState(null); // forecast item being previewed for "Container Aç"
@@ -1178,6 +1179,12 @@ export default function App({ currentUser, onLogout }) {
                   <label className={LBL}>End Date</label>
                   <input type="date" className={INP} value={hareketFilter.tarihBit} onChange={e => setHareketFilter(p => ({...p, tarihBit: e.target.value}))} />
                 </div>
+                <div className="flex gap-1 self-end">
+                  {[["liste","Liste"],["sofor","Şoför / Günlük"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setHareketGorunum(v)}
+                      className={`text-xs font-semibold px-3 py-2 rounded-lg border transition-colors whitespace-nowrap ${hareketGorunum===v?"bg-blue-600 text-white border-blue-600":"border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{l}</button>
+                  ))}
+                </div>
                 <div className="flex items-center gap-2">
                   {(hareketFilter.containerNo||hareketFilter.surucu||hareketFilter.tarihBas||hareketFilter.tarihBit) && (
                     <button className={BTN_G} onClick={() => setHareketFilter({containerNo:"",surucu:"",tarihBas:"",tarihBit:""})}> ✕ Clear</button>
@@ -1187,6 +1194,7 @@ export default function App({ currentUser, onLogout }) {
                   <button className="border border-red-200 text-red-500 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-red-50 transition-colors" onClick={() => exportPDF("hareketler")}>⊡ PDF</button>
                 </div>
               </div>
+              {hareketGorunum === "liste" ? (
               <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
                 {filteredHareketler.length === 0 ? (
                   <div className="py-16 text-center text-slate-400 text-sm">No records match the filter criteria</div>
@@ -1231,6 +1239,84 @@ export default function App({ currentUser, onLogout }) {
                   </div>
                 )}
               </div>
+              ) : (
+                (() => {
+                  if (filteredHareketler.length === 0) {
+                    return <div className="bg-white rounded-xl border border-slate-100 py-16 text-center text-slate-400 text-sm">No records match the filter criteria</div>;
+                  }
+                  // Şoföre göre, sonra güne göre grupla. Toplam km'ye göre sırala.
+                  const bySofor = {};
+                  filteredHareketler.forEach(h => {
+                    const sName = (h.surucu && h.surucu !== "-") ? h.surucu : "— Sürücü belirtilmemiş";
+                    if (!bySofor[sName]) bySofor[sName] = { sofor: sName, total: 0, count: 0, gunler: {} };
+                    const grp = bySofor[sName];
+                    const km = Number(h.km) || 0;
+                    grp.total += km; grp.count += 1;
+                    const day = h.tarih || "—";
+                    if (!grp.gunler[day]) grp.gunler[day] = { tarih: day, km: 0, items: [] };
+                    grp.gunler[day].km += km;
+                    grp.gunler[day].items.push(h);
+                  });
+                  const soforlar = Object.values(bySofor).sort((a,b)=> b.total - a.total);
+                  return (
+                    <div className="space-y-5">
+                      {soforlar.map(s => {
+                        const gunler = Object.values(s.gunler).sort((a,b)=> a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0);
+                        return (
+                          <div key={s.sofor} className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🧑‍✈️</span>
+                                <span className="text-sm font-black text-slate-800">{s.sofor}</span>
+                                <span className="text-xs text-slate-400">· {s.count} iş · {gunler.length} gün</span>
+                              </div>
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Dönem toplamı: {s.total.toLocaleString()} km</span>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                              {gunler.map(g => (
+                                <div key={g.tarih}>
+                                  <div className="px-5 py-2.5 flex items-center justify-between border-b border-slate-50">
+                                    <span className="text-xs font-bold text-slate-500">📅 {g.tarih} · {g.items.length} iş</span>
+                                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200">Günlük: {g.km.toLocaleString()} km</span>
+                                  </div>
+                                  <div className="divide-y divide-slate-50">
+                                    {g.items.map((h,i) => {
+                                      const cont = containers.find(x=>x.containerNo===h.containerNo);
+                                      const co2 = calcCO2(h.km, h.kg||cont?.kg, h.euronorm);
+                                      const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
+                                      const ek = (h.surcharges||[]).reduce((s2,sc)=>s2+(Number(sc.tutar)||0),0);
+                                      return (
+                                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-slate-50 cursor-pointer"
+                                          onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-blue-600 whitespace-nowrap">{h.containerNo}</span>
+                                              <span className="text-xs text-slate-400 truncate">{h.musteri}</span>
+                                              {h.yukDurumu === "loaded" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">📦</span>}
+                                              {h.yukDurumu === "empty" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">⬜</span>}
+                                              {h.yukDurumu === "chassis-only" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">🚛</span>}
+                                            </div>
+                                            <div className="text-xs text-slate-500 truncate mt-0.5">{h.konum}</div>
+                                          </div>
+                                          <div className="flex items-center gap-2 flex-shrink-0">
+                                            {co2 ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{background:ef.bg,color:ef.color}}>{co2}kg</span> : null}
+                                            {ek > 0 ? <span className="text-xs font-bold text-red-500">{ek.toLocaleString()} ₺</span> : null}
+                                            <span className="text-xs font-bold" style={{color: h.km ? "#f59e0b" : "#94a3b8"}}>{h.km ? `${Number(h.km).toLocaleString()} km` : "—"}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           )}
 
