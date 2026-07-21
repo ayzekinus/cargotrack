@@ -102,6 +102,39 @@ const SuggestInput = ({ value, onChange, onSelect, field, placeholder, hasError,
   </div>
 );
 
+// Container numarasını panoya kopyalayan küçük buton. Tıklandığında kısa bir ✓ gösterir.
+const CopyBtn = ({ text, size = 13, className = "" }) => {
+  const [copied, setCopied] = useState(false);
+  const doCopy = (e) => {
+    if (e) e.stopPropagation();
+    if (!text) return;
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200); };
+    const fallback = () => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = String(text); ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+        document.body.removeChild(ta); done();
+      } catch { /* yoksay */ }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(String(text)).then(done).catch(fallback);
+    } else { fallback(); }
+  };
+  return (
+    <button type="button" onClick={doCopy}
+      title={copied ? "Kopyalandı" : "Container numarasını kopyala"}
+      className={`inline-flex items-center justify-center align-middle transition-colors ${copied ? "text-emerald-500" : "text-slate-300 hover:text-blue-500"} ${className}`}
+      style={{ lineHeight: 1 }}>
+      {copied ? (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+      ) : (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+      )}
+    </button>
+  );
+};
+
 export default function App({ currentUser, onLogout }) {
   const [containers, setContainers] = useState([]);
   const [chassisList, setChassisList] = useState([]);
@@ -571,7 +604,37 @@ export default function App({ currentUser, onLogout }) {
   const exportPDF = (type) => {
     const w = window.open("", "_blank");
     const style = `<style>body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:20px}h2{font-size:15px;color:#1d6abf;margin-bottom:4px}p{color:#64748b;font-size:10px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f1f5f9;color:#475569;font-size:9px;text-transform:uppercase;letter-spacing:1px;padding:7px 10px;border:1px solid #e2e8f0;text-align:left}td{padding:7px 10px;border:1px solid #e2e8f0;font-size:10px}tr:nth-child(even) td{background:#f8fafc}.badge{padding:2px 8px;border-radius:2px;font-weight:700;font-size:9px}.aktif{background:#d1fae5;color:#059669}.kapali{background:#f1f5f9;color:#94a3b8}@media print{body{padding:0}</style>`;
-    if (type === "hareketler") {
+    const groupStyle = `<style>.sofor{margin-bottom:16px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;page-break-inside:avoid}.soforhead{background:#f1f5f9;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0}.soforname{font-weight:800;font-size:12px;color:#1e293b}.soforname small{font-weight:400;color:#94a3b8;font-size:10px}.sofortotal{font-weight:800;font-size:11px;color:#059669}.dayhead{display:flex;justify-content:space-between;align-items:center;padding:5px 12px;background:#fafbfc;font-size:10px;font-weight:700;color:#475569;border-top:1px solid #eef2f7}.daykm{color:#1d6abf}.day table{margin:0}.day th{font-size:8px}</style>`;
+    if (type === "hareketler" && hareketGorunum === "sofor") {
+      // Ekrandaki "Şoför / Günlük" görünümüyle aynı kırılım: şoför → gün, günlük km + dönem toplamı
+      const bySofor = {};
+      filteredHareketler.forEach(h => {
+        const sName = (h.surucu && h.surucu !== "-") ? h.surucu : "— Sürücü belirtilmemiş";
+        if (!bySofor[sName]) bySofor[sName] = { sofor: sName, total: 0, count: 0, gunler: {} };
+        const grp = bySofor[sName];
+        const km = Number(h.km) || 0;
+        grp.total += km; grp.count += 1;
+        const day = h.tarih || "—";
+        if (!grp.gunler[day]) grp.gunler[day] = { tarih: day, km: 0, items: [] };
+        grp.gunler[day].km += km;
+        grp.gunler[day].items.push(h);
+      });
+      const soforlar = Object.values(bySofor).sort((a, b) => b.total - a.total);
+      const blocks = soforlar.map(s => {
+        const gunler = Object.values(s.gunler).sort((a, b) => a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0);
+        const gunHtml = gunler.map(g => {
+          const rows = g.items.map(h => {
+            const ek = (h.surcharges || []).reduce((s2, sc) => s2 + (Number(sc.tutar) || 0), 0);
+            return `<tr><td style="color:#1d6abf;font-weight:700">${h.containerNo}</td><td>${h.musteri || ""}</td><td style="color:#64748b">${h.konum || ""}</td><td>${h.yukDurumu || ""}</td><td style="text-align:right">${h.km ? Number(h.km).toLocaleString("en-US") + " km" : "—"}</td><td style="text-align:right;color:#dc2626;font-weight:700">${ek > 0 ? ek.toLocaleString("en-US") + " ₺" : "—"}</td></tr>`;
+          }).join("");
+          return `<div class="day"><div class="dayhead"><span>📅 ${g.tarih} · ${g.items.length} iş</span><span class="daykm">Günlük: ${g.km.toLocaleString("en-US")} km</span></div><table><thead><tr><th>Container No</th><th>Customer</th><th>Location/Route</th><th>Load</th><th>KM</th><th>Surcharge</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        }).join("");
+        return `<div class="sofor"><div class="soforhead"><span class="soforname">🧑‍✈️ ${s.sofor} <small>· ${s.count} iş · ${gunler.length} gün</small></span><span class="sofortotal">Dönem toplamı: ${s.total.toLocaleString("en-US")} km</span></div>${gunHtml}</div>`;
+      }).join("");
+      const period = (hareketFilter.tarihBas || hareketFilter.tarihBit) ? `${hareketFilter.tarihBas || "…"} — ${hareketFilter.tarihBit || "…"}` : "Tüm tarihler";
+      const genelToplam = filteredHareketler.reduce((s, h) => s + (Number(h.km) || 0), 0);
+      w.document.write(`<!DOCTYPE html><html><head><title>Şoför / Günlük Rapor</title>${style}${groupStyle}</head><body><h2>Şoför / Günlük Hareket Raporu</h2><p>Dönem: ${period} · Rapor tarihi: ${today()} · ${filteredHareketler.length} kayıt · Genel toplam: ${genelToplam.toLocaleString("en-US")} km</p>${blocks}</body></html>`);
+    } else if (type === "hareketler") {
       const rows = filteredHareketler.map(h => {
         const ek = (h.surcharges || []).reduce((s, sc) => s + (Number(sc.tutar) || 0), 0);
         return `<tr><td>${h.tarih}</td><td style="color:#1d6abf;font-weight:700">${h.containerNo}</td><td>${h.musteri}</td><td>${h.surucu || ""}</td><td style="color:#64748b">${h.konum || ""}</td><td style="text-align:right">${h.km ? Number(h.km).toLocaleString("en-US") + " km" : "—"}</td><td>${h.firma || ""}</td><td>${h.referans || ""}</td><td>${h.yukDurumu || ""}</td><td style="text-align:right;color:#dc2626;font-weight:700">${ek > 0 ? ek.toLocaleString("en-US") + " ₺" : "—"}</td></tr>`;
@@ -1131,7 +1194,7 @@ export default function App({ currentUser, onLogout }) {
                         {filteredContainers.map(c => (
                           <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
                             onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
-                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600">{c.containerNo}</td>
+                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600"><span className="inline-flex items-center gap-1.5">{c.containerNo}<CopyBtn text={c.containerNo} /></span></td>
                             <td className="px-5 py-3.5 text-sm text-slate-400">{c.chassisNo}</td>
                             <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.musteri}</td>
                             <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanCikis}</td>
@@ -1216,8 +1279,12 @@ export default function App({ currentUser, onLogout }) {
                             <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
                               onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>
                               <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">{h.tarih}</td>
-                              <td className="px-5 py-3.5 text-xs font-bold text-blue-600 whitespace-nowrap"
-                                onClick={e=>{e.stopPropagation();const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</td>
+                              <td className="px-5 py-3.5 text-xs font-bold text-blue-600 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="cursor-pointer" onClick={e=>{e.stopPropagation();const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</span>
+                                  <CopyBtn text={h.containerNo} />
+                                </span>
+                              </td>
                               <td className="px-5 py-3.5 text-xs text-slate-500">{h.musteri}</td>
                               <td className="px-5 py-3.5 text-xs text-slate-700">{h.surucu}</td>
                               <td className="px-5 py-3.5 text-xs text-slate-400 max-w-xs truncate">{h.konum}</td>
@@ -1291,6 +1358,7 @@ export default function App({ currentUser, onLogout }) {
                                           <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold text-blue-600 whitespace-nowrap">{h.containerNo}</span>
+                                              <CopyBtn text={h.containerNo} size={12} />
                                               <span className="text-xs text-slate-400 truncate">{h.musteri}</span>
                                               {h.yukDurumu === "loaded" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">📦</span>}
                                               {h.yukDurumu === "empty" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">⬜</span>}
@@ -1408,7 +1476,10 @@ export default function App({ currentUser, onLogout }) {
                 <div className="flex items-center gap-3 mb-6">
                   <button className={BTN_G} onClick={()=>{setActiveTab("liste");setSelectedContainer(null);}}>← Back</button>
                   <div>
-                    <h2 className="text-xl font-black text-slate-800">{c.containerNo}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-black text-slate-800">{c.containerNo}</h2>
+                      <CopyBtn text={c.containerNo} size={17} />
+                    </div>
                     <p className="text-xs text-slate-400 uppercase tracking-wide">{c.musteri}</p>
                   </div>
                   <div className="ml-auto flex gap-2">
