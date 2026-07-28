@@ -1331,8 +1331,14 @@ export default function App({ currentUser, onLogout }) {
                               }
                             </td>
                             <td className="px-5 py-3.5">
-                              <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold"
-                                onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                              <div className="flex items-center gap-3 justify-end">
+                                {c.durum === "closed" && (
+                                  <button className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold whitespace-nowrap"
+                                    onClick={e => { e.stopPropagation(); handleReopen(c); }} title="Yanlışlıkla kapatıldıysa tekrar aktif yap">↺ Yeniden Aç</button>
+                                )}
+                                <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold whitespace-nowrap"
+                                  onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                              </div>
                             </td>
                           </tr>
                         ))}
