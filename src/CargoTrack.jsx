@@ -895,6 +895,28 @@ export default function App({ currentUser, onLogout }) {
     setShowKapatModal(false);
     setActiveTab("liste");
   };
+
+  // Yanlışlıkla "Return to Port" yapılan container'ı geri açar (undo).
+  // durum → active, dönüş tarihi temizlenir ve kapanışta eklenen "→ Port Return"
+  // kaydı silinir. Diğer hareketler ve km'ler korunur.
+  const handleReopen = (c) => {
+    setConfirmDialog({
+      title: "Container'ı Yeniden Aç",
+      tone: "primary",
+      confirmLabel: "Evet, yeniden aç",
+      message: `"${c.containerNo}" (${c.musteri}) tekrar AKTİF duruma alınacak. Kapanışta eklenen "Limana dönüş" kaydı silinecek ve dönüş tarihi (${c.limanGiris || "—"}) temizlenecek. Diğer hareketler korunur.`,
+      onConfirm: async () => {
+        const { error: cErr } = await supabase.from("containers").update({ durum: "active", liman_giris: null }).eq("id", c.id);
+        if (cErr) { alert("Error reopening container: " + cErr.message); return; }
+        const { error: hErr } = await supabase.from("hareketler").delete().eq("container_id", c.id).eq("konum", "→ Port Return");
+        if (hErr) { alert("Error removing port-return record: " + hErr.message); return; }
+        const updated = { ...c, durum: "active", limanGiris: null, hareketler: (c.hareketler || []).filter(h => h.konum !== "→ Port Return") };
+        setContainers(prev => prev.map(x => x.id === c.id ? updated : x));
+        setSelectedContainer(prev => (prev && prev.id === c.id) ? updated : prev);
+        setConfirmDialog(null);
+      },
+    });
+  };
   // Supabase config check
   if (!isConfigured) {
     return (
@@ -1309,8 +1331,14 @@ export default function App({ currentUser, onLogout }) {
                               }
                             </td>
                             <td className="px-5 py-3.5">
-                              <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold"
-                                onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                              <div className="flex items-center gap-3 justify-end">
+                                {c.durum === "closed" && (
+                                  <button className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold whitespace-nowrap"
+                                    onClick={e => { e.stopPropagation(); handleReopen(c); }} title="Yanlışlıkla kapatıldıysa tekrar aktif yap">↺ Yeniden Aç</button>
+                                )}
+                                <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold whitespace-nowrap"
+                                  onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1588,7 +1616,7 @@ export default function App({ currentUser, onLogout }) {
                     </div>
                     <p className="text-xs text-slate-400 uppercase tracking-wide">{c.musteri}</p>
                   </div>
-                  <div className="ml-auto flex gap-2">
+                  <div className="ml-auto flex gap-2 flex-wrap justify-end">
                     <button className="border border-emerald-200 text-emerald-700 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors" onClick={()=>exportContainerDetailCSV(c)}>⬇ Excel</button>
                     {c.durum === "active" && (
                       <>
@@ -1596,9 +1624,26 @@ export default function App({ currentUser, onLogout }) {
                         <button className={BTN_D} onClick={()=>setShowKapatModal(true)}>⬡ Return to Port</button>
                       </>
                     )}
-                    {c.durum === "closed" && <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-500">✓ Operation Complete</span>}
+                    {c.durum === "closed" && (
+                      <>
+                        <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-500">✓ Operation Complete</span>
+                        <button className={BTN_S} onClick={()=>handleReopen(c)} title="Yanlışlıkla kapatıldıysa tekrar aktif yap">↺ Yeniden Aç</button>
+                      </>
+                    )}
                   </div>
                 </div>
+
+                {/* Kapalı container bandı — yanlışlıkla kapatılmışsa buradan geri açılır */}
+                {c.durum === "closed" && (
+                  <div className="rounded-xl px-5 py-3.5 mb-5 flex items-center gap-3 flex-wrap bg-slate-50 border border-slate-200">
+                    <span className="text-lg">✓</span>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Operasyon kapalı</div>
+                      <div className="text-sm font-black text-slate-700">Limana döndü · {c.limanGiris || "—"}</div>
+                    </div>
+                    <button className={`${BTN_S} ml-auto`} onClick={()=>handleReopen(c)} title="Yanlışlıkla kapatıldıysa tekrar aktif yap">↺ Yeniden Aç</button>
+                  </div>
+                )}
 
                 {/* Güncel konum bandı — chassis-only hareketleri yok sayar */}
                 {c.durum === "active" && (
@@ -2021,7 +2066,13 @@ export default function App({ currentUser, onLogout }) {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl shadow-2xl p-6">
             <h2 className="text-base font-bold text-red-600 mb-2">Return to Port</h2>
-            <p className="text-sm text-slate-500 mb-5">Are you sure you want to close this operation? Billing will be initiated.</p>
+            {selectedContainer && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Kapatılacak container</div>
+                <div className="text-sm font-black text-slate-800">{selectedContainer.containerNo} <span className="font-normal text-slate-400">· {selectedContainer.musteri}</span></div>
+              </div>
+            )}
+            <p className="text-sm text-slate-500 mb-5">Bu operasyonu kapatmak istediğinize emin misiniz? Container arşive alınacak ve faturalandırma başlayacak. (Yanlışlıkla kapatırsanız, kapalı container detayından <b>↺ Yeniden Aç</b> ile geri alabilirsiniz.)</p>
             <div className="mb-5">
               <label className={LBL}>Port Return Date</label>
               <input type="date" className={INP} id="kapatTarih" defaultValue={today()} />
@@ -2332,10 +2383,10 @@ export default function App({ currentUser, onLogout }) {
       {confirmDialog && (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-            <div className="text-base font-bold text-red-600 mb-3">⚠ {confirmDialog.title}</div>
+            <div className={`text-base font-bold mb-3 ${confirmDialog.tone==="primary"?"text-blue-600":"text-red-600"}`}>{confirmDialog.tone==="primary"?"":"⚠ "}{confirmDialog.title}</div>
             <div className="text-sm text-slate-500 mb-6 leading-relaxed">{confirmDialog.message}</div>
             <div className="flex gap-3">
-              <button className={`${BTN_D} flex-1`} onClick={confirmDialog.onConfirm}>Yes, Delete</button>
+              <button className={`${confirmDialog.tone==="primary"?BTN_S:BTN_D} flex-1`} onClick={confirmDialog.onConfirm}>{confirmDialog.confirmLabel||"Yes, Delete"}</button>
               <button className={`${BTN_G} flex-1`} onClick={()=>setConfirmDialog(null)}>Cancel</button>
             </div>
           </div>
