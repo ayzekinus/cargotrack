@@ -1742,6 +1742,16 @@ export default function App({ currentUser, onLogout }) {
         </main>
       </div>{/* end main */}
 
+      {/* Sabit (floating) Movement Ekle butonu — detayda aktif container için,
+          sayfayı yukarı kaydırmadan her an erişilebilir. */}
+      {activeTab === "detay" && selectedContainer && selectedContainer.durum === "active" && !showAddHareket && !showKapatModal && editHareketIdx === null && (
+        <button onClick={() => setShowAddHareket(true)} title="Yeni movement ekle"
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-full shadow-xl shadow-blue-900/30 px-5 py-4 transition-all hover:scale-105 active:scale-95">
+          <span className="text-xl leading-none">+</span>
+          <span className="hidden sm:inline text-sm">Movement Ekle</span>
+        </button>
+      )}
+
       {/* ════════════════════════════════════════════════════════════ */}
       {/* MODALS                                                      */}
       {/* ════════════════════════════════════════════════════════════ */}
