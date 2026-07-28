@@ -65,6 +65,30 @@ const gunFarki = (baslangic, bitis) => {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+// "A → B" konum metninden varış (B) kısmını ayıklar.
+const konumVaris = (konum) => {
+  const parts = (konum || "").split("→").map(s => s.trim());
+  return parts.length === 2 ? parts[1] : (konum || "").trim();
+};
+// Container'ı GERÇEKTEN taşıyan son hareketin index'i.
+// chassis-only (solo çekici) hareketlerde container taşınmaz, konumu değiştirmez.
+const guncelKonumIdx = (hareketler) => {
+  for (let i = (hareketler?.length || 0) - 1; i >= 0; i--) {
+    if (hareketler[i]?.yukDurumu !== "chassis-only") return i;
+  }
+  return -1;
+};
+// Container'ın güncel (fiziksel) konumu — chassis-only hareketleri yok sayar.
+const containerGuncelKonum = (c) => {
+  if (!c || !c.hareketler || c.hareketler.length === 0) return null;
+  const idx = guncelKonumIdx(c.hareketler);
+  if (idx < 0) return null;
+  const konum = c.hareketler[idx].konum || "";
+  if (konum.includes("Port Return")) return "Limana döndü";
+  if (konum.includes("Route not set")) return "Başlangıç noktası (rota girilmedi)";
+  return konumVaris(konum) || konum;
+};
+
 const formatSuggestion = (item) => {
   const a = item.address || {};
   const parts = [
@@ -77,30 +101,48 @@ const formatSuggestion = (item) => {
 };
 
 
-const SuggestInput = ({ value, onChange, onSelect, field, placeholder, hasError, suggestions, sugLoading, activeSug, setActiveSug, setSuggestions, fetchSuggestions }) => (
-  <div className="relative">
-    <input
-      className={`w-full border rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-slate-300 ${hasError ? "border-red-400" : "border-slate-200"}`}
-      placeholder={placeholder} value={value}
-      onChange={e => { onChange(e.target.value); fetchSuggestions(e.target.value, field); setActiveSug(field); }}
-      onFocus={() => { if (suggestions[field]?.length > 0) setActiveSug(field); }}
-      onBlur={() => setTimeout(() => setActiveSug(null), 150)} />
-    {sugLoading[field] && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">⏳</div>}
-    {activeSug === field && suggestions[field]?.length > 0 && (
-      <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-[999] max-h-56 overflow-y-auto mt-1">
-        {suggestions[field].map((item, i) => (
-          <div key={i} onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
-            className="px-4 py-3 cursor-pointer hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
-            <div className="text-sm font-medium text-slate-700">
-              {(() => { const a = item.address || {}; return a.road || a.neighbourhood || a.suburb || a.city || a.town || a.village || item.display_name.split(",")[0]; })()}
+const SuggestInput = ({ value, onChange, onSelect, field, placeholder, hasError, suggestions, sugLoading, activeSug, setActiveSug, setSuggestions, fetchSuggestions, history = [] }) => {
+  const q = (value || "").toLowerCase();
+  // Daha önce kullanılmış adreslerden eşleşenler (boşken son kullanılanlar)
+  const historyMatches = (history || []).filter(a => a && (!q || a.toLowerCase().includes(q))).slice(0, 6);
+  const showNominatim = (suggestions[field]?.length || 0) > 0;
+  const open = activeSug === field && (historyMatches.length > 0 || showNominatim);
+  return (
+    <div className="relative">
+      <input
+        className={`w-full border rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-slate-300 ${hasError ? "border-red-400" : "border-slate-200"}`}
+        placeholder={placeholder} value={value}
+        onChange={e => { onChange(e.target.value); fetchSuggestions(e.target.value, field); setActiveSug(field); }}
+        onFocus={() => setActiveSug(field)}
+        onBlur={() => setTimeout(() => setActiveSug(null), 150)} />
+      {sugLoading[field] && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">⏳</div>}
+      {open && (
+        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-[999] max-h-56 overflow-y-auto mt-1">
+          {historyMatches.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide bg-slate-50 sticky top-0">🕘 Geçmiş adresler</div>
+              {historyMatches.map((a, i) => (
+                <div key={"h" + i} onMouseDown={() => { onSelect(a, a); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
+                  className="px-4 py-2.5 cursor-pointer hover:bg-blue-50 border-b border-slate-50 text-sm text-slate-600 flex items-center gap-2">
+                  <span className="text-slate-300 flex-shrink-0">📍</span><span className="truncate">{a}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {showNominatim && suggestions[field].map((item, i) => (
+            <div key={i} onMouseDown={() => { onSelect(item.display_name, formatSuggestion(item)); setSuggestions(p => ({ ...p, [field]: [] })); setActiveSug(null); }}
+              className="px-4 py-3 cursor-pointer hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors">
+              <div className="text-sm font-medium text-slate-700">
+                {(() => { const a = item.address || {}; return a.road || a.neighbourhood || a.suburb || a.city || a.town || a.village || item.display_name.split(",")[0]; })()}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">{formatSuggestion(item)}</div>
             </div>
-            <div className="text-xs text-slate-400 mt-0.5">{formatSuggestion(item)}</div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Container numarasını panoya kopyalayan küçük buton. Tıklandığında kısa bir ✓ gösterir.
 const CopyBtn = ({ text, size = 13, className = "" }) => {
@@ -263,6 +305,40 @@ export default function App({ currentUser, onLogout }) {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── Tarayıcı geçmişi entegrasyonu ────────────────────────
+  // Sekme/detay geçişlerini tarayıcı geçmişine yazar; böylece tarayıcının
+  // geri/ileri tuşları uygulamadan çıkmadan bir önceki görünüme döner ve
+  // seçimler/filtreler (React state) korunur.
+  const navSig = useRef("");        // son yazılan görünüm imzası
+  const navInited = useRef(false);  // ilk yükleme mi?
+  const navPopping = useRef(false); // geri/ileri tuşundan mı geliniyor?
+
+  useEffect(() => {
+    const sig = activeTab + "|" + (selectedContainer?.id || "");
+    if (!navInited.current) {
+      // İlk yüklemede yeni kayıt ekleme, mevcut kaydı güncelle.
+      navInited.current = true;
+      navSig.current = sig;
+      try { window.history.replaceState({ tab: activeTab, containerId: selectedContainer?.id || null }, ""); } catch { /* yoksay */ }
+      return;
+    }
+    if (navPopping.current) { navPopping.current = false; navSig.current = sig; return; }
+    if (sig === navSig.current) return; // gerçek bir görünüm değişikliği değil (ör. hareket eklenince)
+    navSig.current = sig;
+    try { window.history.pushState({ tab: activeTab, containerId: selectedContainer?.id || null }, ""); } catch { /* yoksay */ }
+  }, [activeTab, selectedContainer]);
+
+  useEffect(() => {
+    const onPop = (e) => {
+      navPopping.current = true;
+      const st = e.state || { tab: "dashboard", containerId: null };
+      setActiveTab(st.tab || "dashboard");
+      setSelectedContainer(st.containerId ? (containers.find(c => c.id === st.containerId) || null) : null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [containers]);
 
   // ── Supabase: helper to generate next ID ─────────────────
   const nextId = (prefix) => {
@@ -479,6 +555,32 @@ export default function App({ currentUser, onLogout }) {
         && (!hareketFilter.tarihBit || h.tarih <= hareketFilter.tarihBit);
     });
   }, [allHareketler, hareketFilter]);
+
+  // ── Geçmişten sık kullanılan rotalar + adres listesi ────────
+  // Mevcut hareketlerin "A → B" konum metinlerinden otomatik türetilir.
+  const rotaGecmisi = useMemo(() => {
+    const adresMap = {};     // tüm adresler -> kullanım sayısı
+    const fromMap = {};      // kalkış adresi -> sayı
+    const toMap = {};        // varış adresi -> sayı
+    containers.forEach(c => (c.hareketler || []).forEach(h => {
+      const konum = (h.konum || "").trim();
+      if (!konum || konum.includes("Route not set") || konum.includes("Port Return")) return;
+      const parts = konum.split("→").map(s => s.trim());
+      if (parts.length !== 2) return;
+      const [from, to] = parts;
+      if (!from || !to) return;
+      adresMap[from] = (adresMap[from] || 0) + 1;
+      adresMap[to] = (adresMap[to] || 0) + 1;
+      fromMap[from] = (fromMap[from] || 0) + 1;
+      toMap[to] = (toMap[to] || 0) + 1;
+    }));
+    const byCount = (m) => (a, b) => m[b] - m[a];
+    return {
+      adresler: Object.keys(adresMap).sort(byCount(adresMap)),          // dropdown önerileri (her iki alan da hepsini arayabilir)
+      kalkisAdresleri: Object.keys(fromMap).sort(byCount(fromMap)),     // sık kalkış adresleri (chip)
+      varisAdresleri: Object.keys(toMap).sort(byCount(toMap)),          // sık varış adresleri (chip)
+    };
+  }, [containers]);
 
   // ── KM Auto-Calculate (Nominatim + OSRM) ────────────────────
   const calculateKm = async (fromStr, toStr, setter) => {
@@ -1471,6 +1573,10 @@ export default function App({ currentUser, onLogout }) {
             const totalKm = toplamKm(c.hareketler);
             const totalEk = surchargeToplamTumu(c.hareketler);
             const totalCO2 = co2Container(c);
+            const guncelKonum = containerGuncelKonum(c);
+            const guncelIdx = guncelKonumIdx(c.hareketler);
+            const sonHareket = c.hareketler[c.hareketler.length - 1];
+            const sonSoloUyari = c.durum === "active" && sonHareket && sonHareket.yukDurumu === "chassis-only";
             return (
               <div>
                 <div className="flex items-center gap-3 mb-6">
@@ -1493,6 +1599,22 @@ export default function App({ currentUser, onLogout }) {
                     {c.durum === "closed" && <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-500">✓ Operation Complete</span>}
                   </div>
                 </div>
+
+                {/* Güncel konum bandı — chassis-only hareketleri yok sayar */}
+                {c.durum === "active" && (
+                  <div className={`rounded-xl px-5 py-3.5 mb-5 flex items-center gap-3 flex-wrap ${sonSoloUyari ? "bg-amber-50 border border-amber-200" : "bg-blue-50 border border-blue-200"}`}>
+                    <span className="text-lg">📍</span>
+                    <div>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${sonSoloUyari ? "text-amber-500" : "text-blue-400"}`}>Güncel Konum — Container nerede?</div>
+                      <div className={`text-sm font-black ${sonSoloUyari ? "text-amber-700" : "text-blue-700"}`}>{guncelKonum || "Henüz taşınmadı"}</div>
+                    </div>
+                    {sonSoloUyari && (
+                      <span className="ml-auto text-[11px] font-semibold text-amber-700 bg-white/70 border border-amber-200 rounded-full px-3 py-1">
+                        ⚠ Son hareket solo çekici (🚛) — container bu hareketle taşınmadı
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Info cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -1550,7 +1672,7 @@ export default function App({ currentUser, onLogout }) {
                       const co2h = calcCO2(h.km, h.kg||c.kg, h.euronorm);
                       const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
                       return (
-                        <div key={i} className="px-5 py-4" style={{borderLeft: i===c.hareketler.length-1?"3px solid #059669":"3px solid #e2e8f0"}}>
+                        <div key={i} className="px-5 py-4" style={{borderLeft: h.yukDurumu==="chassis-only"?"3px solid #f59e0b":(i===guncelIdx?"3px solid #059669":"3px solid #e2e8f0")}}>
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
@@ -1563,7 +1685,8 @@ export default function App({ currentUser, onLogout }) {
                               {h.aciklama && <div className="text-xs text-slate-400 mt-0.5">{h.aciklama}</div>}
                               {h.yukDurumu === "loaded" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">📦 Loaded{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
                               {h.yukDurumu === "empty" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">⬜ Empty{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
-                              {h.yukDurumu === "chassis-only" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">🚛 Chassis{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
+                              {h.yukDurumu === "chassis-only" && <span className="mt-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">🚛 Solo çekici · container taşınmadı{h.kg ? ` · ${Number(h.kg).toLocaleString()} kg` : ""}</span>}
+                              {c.durum === "active" && i === guncelIdx && <span className="mt-1 ml-1 inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">📍 Container şu an burada</span>}
                             </div>
                             <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                               {rowKm > 0 && (
@@ -1721,7 +1844,10 @@ export default function App({ currentUser, onLogout }) {
                   ))}
                 </div>
                 {newHareket.yukDurumu==="chassis-only"&&(
-                  <input className={INP} placeholder="Note: Which container, where to go..." value={newHareket.yukNotu} onChange={e=>setNewHareket(p=>({...p,yukNotu:e.target.value}))} />
+                  <>
+                    <input className={INP} placeholder="Note: Which container, where to go..." value={newHareket.yukNotu} onChange={e=>setNewHareket(p=>({...p,yukNotu:e.target.value}))} />
+                    <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">🚛 Solo çekici hareketi: bu kayıt sürücünün km'sine eklenir ama container'ın konumunu <b>değiştirmez</b> (container yerinde kalır).</p>
+                  </>
                 )}
                 <div className="mt-3">
                   <label className={`${LBL} ${addErrors.kg?"text-red-500":""}`}>
@@ -1742,16 +1868,34 @@ export default function App({ currentUser, onLogout }) {
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">📍 Departure</div>
                     <SuggestInput value={newHareket.konumFrom} field="addFrom" placeholder="City, street or postcode"
-                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions} history={rotaGecmisi.adresler}
                       onChange={v=>{setNewHareket(p=>({...p,konumFrom:v,konum:v&&p.konumTo?v+" → "+p.konumTo:v||p.konumTo||""}));setAddErrors(p=>({...p,konum:""}));}}
                       onSelect={(_,fmt)=>{setNewHareket(p=>({...p,konumFrom:fmt,konum:fmt&&p.konumTo?fmt+" → "+p.konumTo:fmt||p.konumTo||""}));}} />
+                    {rotaGecmisi.kalkisAdresleri.length>0&&(
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {rotaGecmisi.kalkisAdresleri.slice(0,5).map((a,i)=>(
+                          <button key={i} type="button" title={a}
+                            onClick={()=>{setNewHareket(p=>({...p,konumFrom:a,konum:a&&p.konumTo?a+" → "+p.konumTo:a||p.konumTo||""}));setAddErrors(p=>({...p,konum:""}));}}
+                            className="text-[11px] px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-colors max-w-[150px] truncate">{a.split(",")[0]}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">🏁 Destination</div>
                     <SuggestInput value={newHareket.konumTo} field="addTo" placeholder="City, street or postcode"
-                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions}
+                      hasError={!!addErrors.konum} suggestions={suggestions} sugLoading={sugLoading} activeSug={activeSug} setActiveSug={setActiveSug} setSuggestions={setSuggestions} fetchSuggestions={fetchSuggestions} history={rotaGecmisi.adresler}
                       onChange={v=>{setNewHareket(p=>({...p,konumTo:v,konum:p.konumFrom&&v?p.konumFrom+" → "+v:p.konumFrom||v||""}));setAddErrors(p=>({...p,konum:""}));}}
                       onSelect={(_,fmt)=>{setNewHareket(p=>({...p,konumTo:fmt,konum:p.konumFrom&&fmt?p.konumFrom+" → "+fmt:p.konumFrom||fmt||""}));}} />
+                    {rotaGecmisi.varisAdresleri.length>0&&(
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {rotaGecmisi.varisAdresleri.slice(0,5).map((a,i)=>(
+                          <button key={i} type="button" title={a}
+                            onClick={()=>{setNewHareket(p=>({...p,konumTo:a,konum:p.konumFrom&&a?p.konumFrom+" → "+a:p.konumFrom||a||""}));setAddErrors(p=>({...p,konum:""}));}}
+                            className="text-[11px] px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-colors max-w-[150px] truncate">{a.split(",")[0]}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button type="button" className={`${BTN_P} w-full`}
