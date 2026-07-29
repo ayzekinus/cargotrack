@@ -43,6 +43,12 @@ create table if not exists hareketler (
   surcharges     jsonb default '[]'
 );
 
+-- ── SOFORLER (Drivers) ──────────────────────────────────────
+create table if not exists soforler (
+  id   text primary key,
+  ad   text not null
+);
+
 -- ── FORECAST ────────────────────────────────────────────────
 create table if not exists forecast (
   id               text primary key,
@@ -63,9 +69,13 @@ alter table chassis      enable row level security;
 alter table containers   enable row level security;
 alter table hareketler   enable row level security;
 alter table forecast     enable row level security;
+alter table soforler     enable row level security;
 
 create policy "Authenticated full access - chassis"
   on chassis for all using (auth.role() = 'authenticated');
+
+create policy "Authenticated full access - soforler"
+  on soforler for all using (auth.role() = 'authenticated');
 
 create policy "Authenticated full access - containers"
   on containers for all using (auth.role() = 'authenticated');
@@ -99,3 +109,18 @@ alter table hareketler add column if not exists kg numeric;
 -- container_no artık benzersiz OLMAK ZORUNDA DEĞİL. Mevcut veritabanında
 -- bu komutu SQL Editor'da bir kez çalıştırın:
 alter table containers drop constraint if exists containers_container_no_key;
+
+-- ── MIGRATION: Şoförler tablosu (mevcut veritabanına ekle) ───
+-- Daha önce veritabanını kurduysanız SQL Editor'da bir kez çalıştırın.
+-- ÖNEMLİ: policy satırının da çalıştığından emin olun; yoksa RLS açıkken
+-- ekleme "row-level security policy" hatası verir ve okuma boş döner.
+create table if not exists soforler (
+  id   text primary key,
+  ad   text not null
+);
+alter table soforler enable row level security;
+drop policy if exists "Authenticated full access - soforler" on soforler;
+create policy "Authenticated full access - soforler"
+  on soforler for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
