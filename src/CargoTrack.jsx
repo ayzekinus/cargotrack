@@ -180,6 +180,7 @@ const CopyBtn = ({ text, size = 13, className = "" }) => {
 export default function App({ currentUser, onLogout }) {
   const [containers, setContainers] = useState([]);
   const [chassisList, setChassisList] = useState([]);
+  const [soforList, setSoforList] = useState([]);
   const [forecastList, setForecastList] = useState([]);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedContainer, setSelectedContainer] = useState(null);
@@ -200,6 +201,9 @@ export default function App({ currentUser, onLogout }) {
 
   const [newChassis, setNewChassis] = useState({ chassisNo: "", plakaNo: "", tip: [] });
   const [editChassis, setEditChassis] = useState(null);
+  const [newSofor, setNewSofor] = useState("");           // Settings: yeni şoför adı
+  const [soforInlineAdd, setSoforInlineAdd] = useState(false); // Movement formunda hızlı ekleme
+  const [soforInlineName, setSoforInlineName] = useState("");
   const [newForecast, setNewForecast] = useState({ containerNo: "", musteri: "", liman: "", tahminiTarih: today(), aciklama: "", onem: "normal", containerType: "20FT", kg: "", adr: false });
   const [successMessage, setSuccessMessage] = useState("");
   const [forecastPreviewError, setForecastPreviewError] = useState("");
@@ -233,16 +237,19 @@ export default function App({ currentUser, onLogout }) {
     setDbLoading(true);
     setDbError("");
     try {
-      const [contRes, chassisRes, fcRes, harRes] = await Promise.all([
+      const [contRes, chassisRes, fcRes, harRes, soforRes] = await Promise.all([
         supabase.from("containers").select("*").order("id"),
         supabase.from("chassis").select("*").order("id"),
         supabase.from("forecast").select("*").order("tahmini_tarih"),
         supabase.from("hareketler").select("*").order("tarih").order("id"),
+        supabase.from("soforler").select("*").order("ad"),
       ]);
       if (contRes.error) throw contRes.error;
       if (chassisRes.error) throw chassisRes.error;
       if (fcRes.error) throw fcRes.error;
       if (harRes.error) throw harRes.error;
+      // soforler tablosu henüz oluşturulmadıysa (migration çalışmadıysa) uygulama çökmesin.
+      const soforData = soforRes.error ? [] : (soforRes.data || []);
 
       const harByContainer = {};
       (harRes.data || []).forEach(h => {
@@ -297,6 +304,28 @@ export default function App({ currentUser, onLogout }) {
         kg: fc.kg || "",
         adr: fc.adr || false,
       })));
+
+      // ── Şoförler: tablodan yükle + tablo boşsa geçmişten otomatik doldur ──
+      // Geçmiş hareketlerdeki sürücü adlarını harf duyarsız topla, en sık
+      // kullanılan yazımı kanonik kabul et.
+      const spellCount = {}; // key(lowercase) -> { yazım -> adet }
+      (harRes.data || []).forEach(h => {
+        const ad = (h.surucu || "").trim();
+        if (!ad || ad === "-") return;
+        const key = ad.toLocaleLowerCase("tr");
+        if (!spellCount[key]) spellCount[key] = {};
+        spellCount[key][ad] = (spellCount[key][ad] || 0) + 1;
+      });
+      const gecmisKanonik = Object.keys(spellCount).map(key =>
+        Object.entries(spellCount[key]).sort((a, b) => b[1] - a[1])[0][0]
+      );
+      let soforlar = soforData.map(s => ({ id: s.id, ad: s.ad }));
+      if (soforlar.length === 0 && gecmisKanonik.length > 0) {
+        const yeni = gecmisKanonik.map((ad, i) => ({ id: `SF-${Date.now()}-${i}`, ad }));
+        const { error: seedErr } = await supabase.from("soforler").insert(yeni);
+        if (!seedErr) soforlar = yeni;
+      }
+      setSoforList(soforlar.sort((a, b) => a.ad.localeCompare(b.ad, "tr")));
     } catch (err) {
       console.error("Supabase fetch error:", err);
       setDbError("Could not connect to database. Check your Supabase credentials in src/supabase.js");
@@ -424,6 +453,43 @@ export default function App({ currentUser, onLogout }) {
     if (error) { alert("Error updating chassis: " + error.message); return; }
     setChassisList(prev => prev.map(ch => ch.id === editChassis.id ? { ...editChassis } : ch));
     setEditChassis(null);
+  };
+
+  // ── Şoför yönetimi ──────────────────────────────────────────
+  // Bir adın kanonik (listedeki tek tip) karşılığını döndürür; yoksa kırpılmış hali.
+  const soforKanonik = (ad) => {
+    const t = (ad || "").trim();
+    if (!t) return t;
+    const key = t.toLocaleLowerCase("tr");
+    const m = soforList.find(s => s.ad.toLocaleLowerCase("tr") === key);
+    return m ? m.ad : t;
+  };
+
+  const handleAddSofor = async (adRaw) => {
+    const ad = (adRaw ?? newSofor).trim();
+    if (!ad) return null;
+    // Aynı isim (harf duyarsız) zaten varsa tekrar ekleme, mevcut kanoniği döndür.
+    const varOlan = soforList.find(s => s.ad.toLocaleLowerCase("tr") === ad.toLocaleLowerCase("tr"));
+    if (varOlan) { setNewSofor(""); return varOlan.ad; }
+    const id = nextId("SF", soforList);
+    const { error } = await supabase.from("soforler").insert({ id, ad });
+    if (error) { alert("Error saving driver: " + error.message); return null; }
+    setSoforList(prev => [...prev, { id, ad }].sort((a, b) => a.ad.localeCompare(b.ad, "tr")));
+    setNewSofor("");
+    return ad;
+  };
+
+  const handleDeleteSofor = (id, ad) => {
+    setConfirmDialog({
+      title: "Şoförü Sil",
+      message: `"${ad}" şoför listesinden silinecek. (Geçmiş hareketlerdeki kayıtlar etkilenmez.)`,
+      onConfirm: async () => {
+        const { error } = await supabase.from("soforler").delete().eq("id", id);
+        if (error) { alert("Error deleting driver: " + error.message); return; }
+        setSoforList(prev => prev.filter(s => s.id !== id));
+        setConfirmDialog(null);
+      },
+    });
   };
 
   const handleAddForecast = async () => {
@@ -711,8 +777,10 @@ export default function App({ currentUser, onLogout }) {
       // Ekrandaki "Şoför / Günlük" görünümüyle aynı kırılım: şoför → gün, günlük km + dönem toplamı
       const bySofor = {};
       filteredHareketler.forEach(h => {
-        const sName = (h.surucu && h.surucu !== "-") ? h.surucu : "— Sürücü belirtilmemiş";
-        if (!bySofor[sName]) bySofor[sName] = { sofor: sName, total: 0, count: 0, gunler: {} };
+        const raw = (h.surucu || "").trim();
+        const sName = (raw && raw !== "-") ? raw.toLocaleLowerCase("tr") : "__none__";
+        const sDisp = (raw && raw !== "-") ? soforKanonik(raw) : "— Sürücü belirtilmemiş";
+        if (!bySofor[sName]) bySofor[sName] = { sofor: sDisp, total: 0, count: 0, gunler: {} };
         const grp = bySofor[sName];
         const km = Number(h.km) || 0;
         grp.total += km; grp.count += 1;
@@ -829,6 +897,7 @@ export default function App({ currentUser, onLogout }) {
     setNewHareket({ tarih: today(), surucu: "", konum: "", konumFrom: "", konumTo: "", aciklama: "", km: "", kg: "", firma: "", referans: "", yukDurumu: "loaded", yukNotu: "", euronorm: "euro6" });
     setSurchargeLines([]);
     setNewSurcharge({ tip: "custom_stop", aciklama: "", tutar: "", saat: "", saatUcreti: "" });
+    setSoforInlineAdd(false); setSoforInlineName("");
     setShowAddHareket(false);
   };
 
@@ -1444,8 +1513,10 @@ export default function App({ currentUser, onLogout }) {
                   // Şoföre göre, sonra güne göre grupla. Toplam km'ye göre sırala.
                   const bySofor = {};
                   filteredHareketler.forEach(h => {
-                    const sName = (h.surucu && h.surucu !== "-") ? h.surucu : "— Sürücü belirtilmemiş";
-                    if (!bySofor[sName]) bySofor[sName] = { sofor: sName, total: 0, count: 0, gunler: {} };
+                    const raw = (h.surucu || "").trim();
+                    const sName = (raw && raw !== "-") ? raw.toLocaleLowerCase("tr") : "__none__";
+                    const sDisp = (raw && raw !== "-") ? soforKanonik(raw) : "— Sürücü belirtilmemiş";
+                    if (!bySofor[sName]) bySofor[sName] = { sofor: sDisp, total: 0, count: 0, gunler: {} };
                     const grp = bySofor[sName];
                     const km = Number(h.km) || 0;
                     grp.total += km; grp.count += 1;
@@ -1586,6 +1657,38 @@ export default function App({ currentUser, onLogout }) {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Şoförler yönetimi */}
+              <div className="bg-white rounded-xl border border-slate-100 overflow-hidden mt-6">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 gap-3 flex-wrap">
+                  <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Şoförler <span className="text-slate-300 font-normal normal-case">({soforList.length})</span></h2>
+                  <div className="flex gap-2">
+                    <input className={INP} style={{width:200}} placeholder="Yeni şoför adı" value={newSofor}
+                      onChange={e=>setNewSofor(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleAddSofor();}}} />
+                    <button className={BTN_P} onClick={()=>handleAddSofor()}>+ Ekle</button>
+                  </div>
+                </div>
+                {soforList.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-sm">Henüz şoför eklenmedi. Geçmiş hareketlerdeki şoförler ilk açılışta otomatik eklenir.</div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {soforList.map(s=>{
+                      const kullanim = containers.reduce((n,c)=>n+(c.hareketler||[]).filter(h=>(h.surucu||"").trim().toLocaleLowerCase("tr")===s.ad.toLocaleLowerCase("tr")).length,0);
+                      return (
+                        <div key={s.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🧑‍✈️</span>
+                            <span className="text-sm font-semibold text-slate-700">{s.ad}</span>
+                            <span className="text-xs text-slate-400">· {kullanim} hareket</span>
+                          </div>
+                          <button className={BTN_D} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>handleDeleteSofor(s.id,s.ad)}>Sil</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1872,17 +1975,37 @@ export default function App({ currentUser, onLogout }) {
           <div className="bg-white w-full sm:max-w-xl rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[92vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
               <h2 className="text-base font-bold text-blue-600">🚛 Add Movement</h2>
-              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>×</button>
+              <button className="text-slate-400 hover:text-slate-600 text-2xl leading-none" onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});setSoforInlineAdd(false);setSoforInlineName("");}}>×</button>
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {[["Driver","surucu","Driver name"],["Company","firma","Company name"]].map(([l,k,ph])=>(
-                  <div key={k}>
-                    <label className={`${LBL} ${addErrors[k]?"text-red-500":""}`}>{l} {addErrors[k]&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {addErrors[k]}</span>}</label>
-                    <input className={`${INP} ${addErrors[k]?"border-red-400":""}`} placeholder={ph} value={newHareket[k]}
-                      onChange={e=>{setNewHareket(p=>({...p,[k]:e.target.value}));setAddErrors(p=>({...p,[k]:""}));}} />
-                  </div>
-                ))}
+                <div>
+                  <label className={`${LBL} ${addErrors.surucu?"text-red-500":""}`}>Driver {addErrors.surucu&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {addErrors.surucu}</span>}</label>
+                  {!soforInlineAdd ? (
+                    <div className="flex gap-2">
+                      <select className={`${INP} ${addErrors.surucu?"border-red-400":""} cursor-pointer flex-1`} value={newHareket.surucu}
+                        onChange={e=>{setNewHareket(p=>({...p,surucu:e.target.value}));setAddErrors(p=>({...p,surucu:""}));}}>
+                        <option value="">— Şoför seç —</option>
+                        {soforList.map(s=>(<option key={s.id} value={s.ad}>{s.ad}</option>))}
+                        {newHareket.surucu && !soforList.some(s=>s.ad===newHareket.surucu) && <option value={newHareket.surucu}>{newHareket.surucu}</option>}
+                      </select>
+                      <button type="button" className={BTN_G} title="Yeni şoför ekle" onClick={()=>{setSoforInlineAdd(true);setSoforInlineName("");}}>＋</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input className={INP} autoFocus placeholder="Yeni şoför adı" value={soforInlineName}
+                        onChange={e=>setSoforInlineName(e.target.value)}
+                        onKeyDown={async e=>{ if(e.key==="Enter"){ e.preventDefault(); const ad=await handleAddSofor(soforInlineName); if(ad){setNewHareket(p=>({...p,surucu:ad}));setAddErrors(p=>({...p,surucu:""}));} setSoforInlineAdd(false);setSoforInlineName(""); } }} />
+                      <button type="button" className={BTN_S} onClick={async()=>{ const ad=await handleAddSofor(soforInlineName); if(ad){setNewHareket(p=>({...p,surucu:ad}));setAddErrors(p=>({...p,surucu:""}));} setSoforInlineAdd(false);setSoforInlineName(""); }}>Ekle</button>
+                      <button type="button" className={BTN_G} onClick={()=>{setSoforInlineAdd(false);setSoforInlineName("");}}>✕</button>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={`${LBL} ${addErrors.firma?"text-red-500":""}`}>Company {addErrors.firma&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {addErrors.firma}</span>}</label>
+                  <input className={`${INP} ${addErrors.firma?"border-red-400":""}`} placeholder="Company name" value={newHareket.firma}
+                    onChange={e=>{setNewHareket(p=>({...p,firma:e.target.value}));setAddErrors(p=>({...p,firma:""}));}} />
+                </div>
               </div>
 
               {/* Load Status */}
@@ -2055,7 +2178,7 @@ export default function App({ currentUser, onLogout }) {
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
               <button className={`${BTN_P} flex-1`} onClick={handleAddHareket}>💾 Save Movement</button>
-              <button className={BTN_G} onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});}}>Cancel</button>
+              <button className={BTN_G} onClick={()=>{setShowAddHareket(false);setSurchargeLines([]);setAddErrors({});setNewSurcharge({tip:"custom_stop",aciklama:"",tutar:"",saat:"",saatUcreti:""});setSoforInlineAdd(false);setSoforInlineName("");}}>Cancel</button>
             </div>
           </div>
         </div>
@@ -2157,13 +2280,20 @@ export default function App({ currentUser, onLogout }) {
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {[["Driver","surucu","Driver name"],["Company","firma","Company name"]].map(([l,k,ph])=>(
-                  <div key={k}>
-                    <label className={`${LBL} ${editErrors[k]?"text-red-500":""}`}>{l} {editErrors[k]&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {editErrors[k]}</span>}</label>
-                    <input className={`${INP} ${editErrors[k]?"border-red-400":""}`} placeholder={ph} value={editHareket[k]||""}
-                      onChange={e=>{setEditHareket(p=>({...p,[k]:e.target.value}));setEditErrors(p=>({...p,[k]:""}));}} />
-                  </div>
-                ))}
+                <div>
+                  <label className={`${LBL} ${editErrors.surucu?"text-red-500":""}`}>Driver {editErrors.surucu&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {editErrors.surucu}</span>}</label>
+                  <select className={`${INP} ${editErrors.surucu?"border-red-400":""} cursor-pointer`} value={editHareket.surucu||""}
+                    onChange={e=>{setEditHareket(p=>({...p,surucu:e.target.value}));setEditErrors(p=>({...p,surucu:""}));}}>
+                    <option value="">— Şoför seç —</option>
+                    {soforList.map(s=>(<option key={s.id} value={s.ad}>{s.ad}</option>))}
+                    {editHareket.surucu && !soforList.some(s=>s.ad===editHareket.surucu) && <option value={editHareket.surucu}>{editHareket.surucu} (listede yok)</option>}
+                  </select>
+                </div>
+                <div>
+                  <label className={`${LBL} ${editErrors.firma?"text-red-500":""}`}>Company {editErrors.firma&&<span className="text-red-400 text-[10px] normal-case font-normal">⚠ {editErrors.firma}</span>}</label>
+                  <input className={`${INP} ${editErrors.firma?"border-red-400":""}`} placeholder="Company name" value={editHareket.firma||""}
+                    onChange={e=>{setEditHareket(p=>({...p,firma:e.target.value}));setEditErrors(p=>({...p,firma:""}));}} />
+                </div>
               </div>
               <div>
                 <label className={LBL}>Container Load Status</label>
