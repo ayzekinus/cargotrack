@@ -190,6 +190,7 @@ export default function App({ currentUser, onLogout }) {
   const [showAddChassis, setShowAddChassis] = useState(false);
   const [showAddForecast, setShowAddForecast] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dashSearch, setDashSearch] = useState(""); // Dashboard aktif container filtresi
   const [filterDurum, setFilterDurum] = useState("all");
   const [containerTarih, setContainerTarih] = useState({ tarihBas: "", tarihBit: "" });
   const [hareketFilter, setHareketFilter] = useState({ containerNo: "", surucu: "", tarihBas: "", tarihBit: "" });
@@ -204,6 +205,8 @@ export default function App({ currentUser, onLogout }) {
   const [newSofor, setNewSofor] = useState("");           // Settings: yeni şoför adı
   const [soforInlineAdd, setSoforInlineAdd] = useState(false); // Movement formunda hızlı ekleme
   const [soforInlineName, setSoforInlineName] = useState("");
+  const [editSoforId, setEditSoforId] = useState(null);   // Settings: ad düzenleme
+  const [editSoforName, setEditSoforName] = useState("");
   const [newForecast, setNewForecast] = useState({ containerNo: "", musteri: "", liman: "", tahminiTarih: today(), aciklama: "", onem: "normal", containerType: "20FT", kg: "", adr: false });
   const [successMessage, setSuccessMessage] = useState("");
   const [forecastPreviewError, setForecastPreviewError] = useState("");
@@ -479,6 +482,81 @@ export default function App({ currentUser, onLogout }) {
     return ad;
   };
 
+  // Verilen yazımları (variants) tek bir kanonik ada eşitler: hem DB'deki
+  // hareketler.surucu kayıtlarını hem de yerel state'i günceller. Etkilenen kayıt sayısını döndürür.
+  const cascadeSurucuRename = async (variants, canonical) => {
+    const toReplace = variants.filter(v => v && v !== canonical);
+    if (toReplace.length === 0) return 0;
+    const setRep = new Set(toReplace);
+    const { error } = await supabase.from("hareketler").update({ surucu: canonical }).in("surucu", toReplace);
+    if (error) throw error;
+    let n = 0;
+    containers.forEach(c => (c.hareketler || []).forEach(h => { if (setRep.has((h.surucu || "").trim())) n++; }));
+    setContainers(prev => prev.map(c => ({ ...c, hareketler: (c.hareketler || []).map(h => setRep.has((h.surucu || "").trim()) ? { ...h, surucu: canonical } : h) })));
+    setSelectedContainer(prev => prev ? { ...prev, hareketler: (prev.hareketler || []).map(h => setRep.has((h.surucu || "").trim()) ? { ...h, surucu: canonical } : h) } : prev);
+    return n;
+  };
+
+  // Tüm hareket kayıtlarını, şoför listesindeki tek tip yazıma göre düzeltir (harf duyarsız).
+  const handleNormalizeSurucu = async () => {
+    const allSpellings = new Set();
+    containers.forEach(c => (c.hareketler || []).forEach(h => { const a = (h.surucu || "").trim(); if (a && a !== "-") allSpellings.add(a); }));
+    let toplam = 0;
+    try {
+      for (const s of soforList) {
+        const key = s.ad.toLocaleLowerCase("tr");
+        const variants = [...allSpellings].filter(sp => sp.toLocaleLowerCase("tr") === key && sp !== s.ad);
+        if (variants.length) toplam += await cascadeSurucuRename(variants, s.ad);
+      }
+    } catch (e) { alert("Güncelleme hatası: " + e.message); return; }
+    if (toplam === 0) alert("Düzeltilecek farklı yazım bulunamadı — tüm kayıtlar zaten tek tip.");
+    else alert(toplam + " hareket kaydı, şoför listesindeki tek tip yazıma getirildi.");
+  };
+
+  // Bir şoförün adını değiştirir ve tüm eski yazımlı hareket kayıtlarını yeni ada eşitler.
+  const handleSaveRenameSofor = async () => {
+    const yeniAd = editSoforName.trim();
+    const s = soforList.find(x => x.id === editSoforId);
+    if (!s || !yeniAd) { setEditSoforId(null); setEditSoforName(""); return; }
+    // Aynı ada (harf duyarsız) sahip başka bir kayıt varsa uyar
+    const cakisma = soforList.find(x => x.id !== editSoforId && x.ad.toLocaleLowerCase("tr") === yeniAd.toLocaleLowerCase("tr"));
+    if (cakisma) { alert(`"${yeniAd}" zaten listede var. Önce birini silin ya da farklı bir ad girin.`); return; }
+    const { error } = await supabase.from("soforler").update({ ad: yeniAd }).eq("id", editSoforId);
+    if (error) { alert("Ad güncellenemedi: " + error.message); return; }
+    // Eski adın tüm yazımlarını (harf duyarsız) yeni ada eşitle
+    const eskiKey = s.ad.toLocaleLowerCase("tr");
+    const allSpellings = new Set();
+    containers.forEach(c => (c.hareketler || []).forEach(h => { const a = (h.surucu || "").trim(); if (a) allSpellings.add(a); }));
+    const variants = [...allSpellings].filter(sp => sp.toLocaleLowerCase("tr") === eskiKey);
+    let n = 0;
+    try { n = await cascadeSurucuRename(variants, yeniAd); } catch (e) { alert("Kayıtlar güncellenemedi: " + e.message); }
+    setSoforList(prev => prev.map(x => x.id === editSoforId ? { ...x, ad: yeniAd } : x).sort((a, b) => a.ad.localeCompare(b.ad, "tr")));
+    setEditSoforId(null); setEditSoforName("");
+    if (n > 0) alert(`Ad güncellendi ve ${n} hareket kaydı "${yeniAd}" olarak eşitlendi.`);
+  };
+
+  // Geçmiş hareketlerdeki şoför adlarını (harf duyarsız) listeye elle içe aktarır.
+  const handleImportSoforlerFromHistory = async () => {
+    const spellCount = {};
+    containers.forEach(c => (c.hareketler || []).forEach(h => {
+      const ad = (h.surucu || "").trim();
+      if (!ad || ad === "-") return;
+      const key = ad.toLocaleLowerCase("tr");
+      if (!spellCount[key]) spellCount[key] = {};
+      spellCount[key][ad] = (spellCount[key][ad] || 0) + 1;
+    }));
+    const mevcut = new Set(soforList.map(s => s.ad.toLocaleLowerCase("tr")));
+    const eklenecek = Object.keys(spellCount)
+      .filter(key => !mevcut.has(key))
+      .map(key => Object.entries(spellCount[key]).sort((a, b) => b[1] - a[1])[0][0]);
+    if (eklenecek.length === 0) { alert("İçe aktarılacak yeni şoför bulunamadı — hepsi zaten listede."); return; }
+    const yeni = eklenecek.map((ad, i) => ({ id: `SF-${Date.now()}-${i}`, ad }));
+    const { error } = await supabase.from("soforler").insert(yeni);
+    if (error) { alert("Şoförler eklenemedi: " + error.message + "\n\nSupabase'de 'soforler' tablosu ve RLS policy oluşturuldu mu? (schema.sql'deki migration'ı çalıştırın.)"); return; }
+    setSoforList(prev => [...prev, ...yeni].sort((a, b) => a.ad.localeCompare(b.ad, "tr")));
+    alert(eklenecek.length + " şoför geçmişten içe aktarıldı.");
+  };
+
   const handleDeleteSofor = (id, ad) => {
     setConfirmDialog({
       title: "Şoförü Sil",
@@ -574,6 +652,13 @@ export default function App({ currentUser, onLogout }) {
 
   const aktifler = containers.filter(c => c.durum === "active");
   const kapalilar = containers.filter(c => c.durum === "closed");
+  // Dashboard aktif container filtresi (Container No / Customer)
+  const aktiflerFiltered = aktifler.filter(c => {
+    const q = dashSearch.trim().toLocaleLowerCase("tr");
+    if (!q) return true;
+    return (c.containerNo || "").toLocaleLowerCase("tr").includes(q)
+      || (c.musteri || "").toLocaleLowerCase("tr").includes(q);
+  });
 
   const filteredContainers = useMemo(() => {
     return containers.filter(c => {
@@ -1179,12 +1264,18 @@ export default function App({ currentUser, onLogout }) {
 
               {/* Active containers table */}
               <div className="bg-white rounded-xl border border-slate-100 mb-6">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 gap-3 flex-wrap">
                   <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Active Containers</h2>
-                  <span className="text-xs text-slate-400">{aktifler.length} active</span>
+                  <div className="flex items-center gap-2">
+                    <input className={INP} style={{width:240}} placeholder="Container No / Müşteri filtrele..."
+                      value={dashSearch} onChange={e=>setDashSearch(e.target.value)} />
+                    <span className="text-xs text-slate-400 whitespace-nowrap">{aktiflerFiltered.length}/{aktifler.length}</span>
+                  </div>
                 </div>
                 {aktifler.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 text-sm">No active containers</div>
+                ) : aktiflerFiltered.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-sm">Filtreyle eşleşen aktif container yok</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-max">
@@ -1196,10 +1287,14 @@ export default function App({ currentUser, onLogout }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {aktifler.map(c => (
-                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
-                            onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
-                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600">{c.containerNo}</td>
+                        {aktiflerFiltered.map(c => (
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="cursor-pointer hover:underline" onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>{c.containerNo}</span>
+                                <CopyBtn text={c.containerNo} />
+                              </span>
+                            </td>
                             <td className="px-5 py-3.5 text-sm text-slate-500">{c.chassisNo}</td>
                             <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.musteri}</td>
                             <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanCikis}</td>
@@ -1209,7 +1304,7 @@ export default function App({ currentUser, onLogout }) {
                             <td className="px-5 py-3.5 text-xs text-slate-400 max-w-xs truncate">{c.hareketler[c.hareketler.length - 1]?.konum?.split("→").pop()?.trim() || "—"}</td>
                             <td className="px-5 py-3.5">
                               <button className="text-xs text-blue-500 hover:text-blue-700 font-semibold whitespace-nowrap"
-                                onClick={e => { e.stopPropagation(); setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
+                                onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>Detail →</button>
                             </td>
                           </tr>
                         ))}
@@ -1385,9 +1480,8 @@ export default function App({ currentUser, onLogout }) {
                       </thead>
                       <tbody>
                         {filteredContainers.map(c => (
-                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
-                            onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>
-                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600"><span className="inline-flex items-center gap-1.5">{c.containerNo}<CopyBtn text={c.containerNo} /></span></td>
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                            <td className="px-5 py-3.5 text-sm font-semibold text-blue-600"><span className="inline-flex items-center gap-1.5"><span className="cursor-pointer hover:underline" onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>{c.containerNo}</span><CopyBtn text={c.containerNo} /></span></td>
                             <td className="px-5 py-3.5 text-sm text-slate-400">{c.chassisNo}</td>
                             <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.musteri}</td>
                             <td className="px-5 py-3.5 text-xs text-slate-400">{c.limanCikis}</td>
@@ -1475,12 +1569,11 @@ export default function App({ currentUser, onLogout }) {
                           const co2 = calcCO2(h.km, h.kg||cont?.kg, h.euronorm);
                           const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
                           return (
-                            <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer"
-                              onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>
+                            <tr key={i} className="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
                               <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">{h.tarih}</td>
                               <td className="px-5 py-3.5 text-xs font-bold text-blue-600 whitespace-nowrap">
                                 <span className="inline-flex items-center gap-1.5">
-                                  <span className="cursor-pointer" onClick={e=>{e.stopPropagation();const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</span>
+                                  <span className="cursor-pointer hover:underline" onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</span>
                                   <CopyBtn text={h.containerNo} />
                                 </span>
                               </td>
@@ -1554,11 +1647,10 @@ export default function App({ currentUser, onLogout }) {
                                       const ef = EMISSION_FACTORS[h.euronorm||"euro6"]||EMISSION_FACTORS.euro6;
                                       const ek = (h.surcharges||[]).reduce((s2,sc)=>s2+(Number(sc.tutar)||0),0);
                                       return (
-                                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-slate-50 cursor-pointer"
-                                          onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>
+                                        <div key={i} className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-slate-50">
                                           <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                              <span className="text-xs font-bold text-blue-600 whitespace-nowrap">{h.containerNo}</span>
+                                              <span className="text-xs font-bold text-blue-600 whitespace-nowrap cursor-pointer hover:underline" onClick={()=>{const c=containers.find(x=>x.containerNo===h.containerNo);if(c){setSelectedContainer(c);setActiveTab("detay");}}}>{h.containerNo}</span>
                                               <CopyBtn text={h.containerNo} size={12} />
                                               <span className="text-xs text-slate-400 truncate">{h.musteri}</span>
                                               {h.yukDurumu === "loaded" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">📦</span>}
@@ -1665,7 +1757,9 @@ export default function App({ currentUser, onLogout }) {
               <div className="bg-white rounded-xl border border-slate-100 overflow-hidden mt-6">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 gap-3 flex-wrap">
                   <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Şoförler <span className="text-slate-300 font-normal normal-case">({soforList.length})</span></h2>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <button className={BTN_G} onClick={handleImportSoforlerFromHistory} title="Geçmiş hareketlerdeki şoförleri listeye ekle">↧ Geçmişten İçe Aktar</button>
+                    <button className={BTN_S} onClick={handleNormalizeSurucu} title="Tüm hareket kayıtlarındaki farklı yazımları (Emine/EMINE) listedeki tek tipe getir">🔧 Tek Tipe Getir</button>
                     <input className={INP} style={{width:200}} placeholder="Yeni şoför adı" value={newSofor}
                       onChange={e=>setNewSofor(e.target.value)}
                       onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleAddSofor();}}} />
@@ -1678,14 +1772,37 @@ export default function App({ currentUser, onLogout }) {
                   <div className="divide-y divide-slate-50">
                     {soforList.map(s=>{
                       const kullanim = containers.reduce((n,c)=>n+(c.hareketler||[]).filter(h=>(h.surucu||"").trim().toLocaleLowerCase("tr")===s.ad.toLocaleLowerCase("tr")).length,0);
+                      const editing = editSoforId === s.id;
                       return (
-                        <div key={s.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🧑‍✈️</span>
-                            <span className="text-sm font-semibold text-slate-700">{s.ad}</span>
-                            <span className="text-xs text-slate-400">· {kullanim} hareket</span>
+                        <div key={s.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 gap-2">
+                          {editing ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-base">🧑‍✈️</span>
+                              <input className={INP} style={{maxWidth:240}} autoFocus value={editSoforName}
+                                onChange={e=>setEditSoforName(e.target.value)}
+                                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleSaveRenameSofor();}if(e.key==="Escape"){setEditSoforId(null);setEditSoforName("");}}} />
+                              <span className="text-[11px] text-slate-400">{kullanim} kayıt bu ada eşitlenecek</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🧑‍✈️</span>
+                              <span className="text-sm font-semibold text-slate-700">{s.ad}</span>
+                              <span className="text-xs text-slate-400">· {kullanim} hareket</span>
+                            </div>
+                          )}
+                          <div className="flex gap-2 flex-shrink-0">
+                            {editing ? (
+                              <>
+                                <button className={BTN_S} style={{fontSize:"11px",padding:"5px 10px"}} onClick={handleSaveRenameSofor}>Kaydet</button>
+                                <button className={BTN_G} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>{setEditSoforId(null);setEditSoforName("");}}>İptal</button>
+                              </>
+                            ) : (
+                              <>
+                                <button className={BTN_G} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>{setEditSoforId(s.id);setEditSoforName(s.ad);}} title="Adı düzenle ve tüm kayıtları bu ada eşitle">✏ Düzenle</button>
+                                <button className={BTN_D} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>handleDeleteSofor(s.id,s.ad)}>Sil</button>
+                              </>
+                            )}
                           </div>
-                          <button className={BTN_D} style={{fontSize:"11px",padding:"5px 10px"}} onClick={()=>handleDeleteSofor(s.id,s.ad)}>Sil</button>
                         </div>
                       );
                     })}
