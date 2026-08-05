@@ -191,6 +191,7 @@ export default function App({ currentUser, onLogout }) {
   const [showAddForecast, setShowAddForecast] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dashSearch, setDashSearch] = useState(""); // Dashboard aktif container filtresi
+  const [overviewSearch, setOverviewSearch] = useState(""); // Overview filtresi
   const [filterDurum, setFilterDurum] = useState("all");
   const [containerTarih, setContainerTarih] = useState({ tarihBas: "", tarihBit: "" });
   const [hareketFilter, setHareketFilter] = useState({ containerNo: "", surucu: "", tarihBas: "", tarihBit: "" });
@@ -660,6 +661,34 @@ export default function App({ currentUser, onLogout }) {
       || (c.musteri || "").toLocaleLowerCase("tr").includes(q);
   });
 
+  // ── Overview: dolu/boş container + boş şasi (konumlarıyla) ──
+  // Container'ın güncel yük durumu = onu gerçekten taşıyan son hareketin yükü
+  // (solo çekici hareketleri yok sayılır — güncel konum mantığıyla aynı).
+  const containerYuk = (c) => {
+    const idx = guncelKonumIdx(c.hareketler);
+    return idx >= 0 ? (c.hareketler[idx].yukDurumu || "loaded") : "loaded";
+  };
+  const doluContainerlar = aktifler.filter(c => containerYuk(c) === "loaded");
+  const bosContainerlar = aktifler.filter(c => containerYuk(c) === "empty");
+  const bosSasiler = chassisWithDurum.filter(ch => ch.durum === "available").map(ch => {
+    const kullananlar = containers.filter(c => c.chassisNo === ch.chassisNo);
+    let sonKonum = "—";
+    if (kullananlar.length) {
+      const sonC = kullananlar.slice().sort((a, b) => {
+        const la = a.hareketler[a.hareketler.length - 1]?.tarih || "";
+        const lb = b.hareketler[b.hareketler.length - 1]?.tarih || "";
+        return la < lb ? 1 : la > lb ? -1 : 0;
+      })[0];
+      sonKonum = containerGuncelKonum(sonC) || "—";
+    }
+    return { ...ch, sonKonum };
+  });
+  const overviewFiltre = (arr, alanlar) => {
+    const q = overviewSearch.trim().toLocaleLowerCase("tr");
+    if (!q) return arr;
+    return arr.filter(o => alanlar.some(a => (o[a] || "").toLocaleLowerCase("tr").includes(q)));
+  };
+
   const filteredContainers = useMemo(() => {
     return containers.filter(c => {
       const matchSearch =
@@ -1101,13 +1130,14 @@ export default function App({ currentUser, onLogout }) {
 
   const NAV = [
     { key: "dashboard", icon: "⊞", label: "Dashboard" },
+    { key: "overview",  icon: "🗺", label: "Overview" },
     { key: "forecast",  icon: "◈", label: "Forecast" },
     { key: "liste",     icon: "▦", label: "Containers" },
     { key: "hareketler",icon: "⊳", label: "Movements" },
     { key: "ayarlar",   icon: "⊙", label: "Settings" },
   ];
 
-  const PAGE_TITLE = { dashboard: "Dashboard", forecast: "Forecast", liste: "Containers", hareketler: "Movements", ayarlar: "Settings", detay: selectedContainer ? selectedContainer.containerNo : "Detail" };
+  const PAGE_TITLE = { dashboard: "Dashboard", overview: "Overview", forecast: "Forecast", liste: "Containers", hareketler: "Movements", ayarlar: "Settings", detay: selectedContainer ? selectedContainer.containerNo : "Detail" };
 
   const INP = "w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors placeholder:text-slate-300";
   const LBL = "block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5";
@@ -1352,6 +1382,108 @@ export default function App({ currentUser, onLogout }) {
               )}
             </div>
           )}
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* OVERVIEW TAB                                          */}
+          {/* ══════════════════════════════════════════════════════ */}
+          {activeTab === "overview" && (() => {
+            const dolu = overviewFiltre(doluContainerlar.map(c => ({ ...c, _konum: containerGuncelKonum(c) || "—" })), ["containerNo", "musteri", "chassisNo", "_konum"]);
+            const bos = overviewFiltre(bosContainerlar.map(c => ({ ...c, _konum: containerGuncelKonum(c) || "—" })), ["containerNo", "musteri", "chassisNo", "_konum"]);
+            const sasi = overviewFiltre(bosSasiler, ["chassisNo", "plakaNo", "sonKonum"]);
+            const KonumSatiri = ({ konum }) => (
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-50 rounded-lg px-2.5 py-1.5 mt-2">
+                <span>📍</span><span className="truncate">{konum || "—"}</span>
+              </div>
+            );
+            const Bolum = ({ baslik, sayi, renk, bos: bosMesaj, children }) => (
+              <div className="mb-7">
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-sm font-black text-slate-800">{baslik}</h2>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: renk + "18", color: renk }}>{sayi}</span>
+                </div>
+                {sayi === 0 ? <div className="text-sm text-slate-400 bg-white border border-slate-100 rounded-xl py-8 text-center">{bosMesaj}</div>
+                  : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>}
+              </div>
+            );
+            return (
+              <div>
+                {/* Özet kartları */}
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  {[
+                    { l: "📦 Dolu Container", v: doluContainerlar.length, c: "#2563eb" },
+                    { l: "⬜ Boş Container", v: bosContainerlar.length, c: "#64748b" },
+                    { l: "🚛 Boş Şasi", v: bosSasiler.length, c: "#d97706" },
+                  ].map(s => (
+                    <div key={s.l} className="bg-white rounded-xl border border-slate-100 p-5">
+                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.l}</div>
+                      <div className="text-4xl font-black mt-1" style={{ color: s.c }}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Arama */}
+                <div className="bg-white rounded-xl border border-slate-100 p-4 mb-6">
+                  <input className={INP} placeholder="Container No / müşteri / şasi / konum ara..."
+                    value={overviewSearch} onChange={e => setOverviewSearch(e.target.value)} />
+                </div>
+
+                {/* Dolu Container'lar */}
+                <Bolum baslik="📦 Dolu Container'lar" sayi={dolu.length} renk="#2563eb" bos="Dolu container yok">
+                  {dolu.map(c => (
+                    <div key={c.id} className="bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-sm font-black text-blue-600 cursor-pointer hover:underline" onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>{c.containerNo}</span>
+                          <CopyBtn text={c.containerNo} />
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 whitespace-nowrap">📦 Dolu</span>
+                      </div>
+                      <div className="text-xs text-slate-500 font-medium truncate">{c.musteri}</div>
+                      <div className="text-xs text-slate-400 mt-1">🚛 {c.chassisNo}</div>
+                      <KonumSatiri konum={c._konum} />
+                    </div>
+                  ))}
+                </Bolum>
+
+                {/* Boş Container'lar */}
+                <Bolum baslik="⬜ Boş Container'lar" sayi={bos.length} renk="#64748b" bos="Boş container yok">
+                  {bos.map(c => (
+                    <div key={c.id} className="bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-sm font-black text-blue-600 cursor-pointer hover:underline" onClick={() => { setSelectedContainer(c); setActiveTab("detay"); }}>{c.containerNo}</span>
+                          <CopyBtn text={c.containerNo} />
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 whitespace-nowrap">⬜ Boş</span>
+                      </div>
+                      <div className="text-xs text-slate-500 font-medium truncate">{c.musteri}</div>
+                      <div className="text-xs text-slate-400 mt-1">🚛 {c.chassisNo}</div>
+                      <KonumSatiri konum={c._konum} />
+                    </div>
+                  ))}
+                </Bolum>
+
+                {/* Boş Şasiler */}
+                <Bolum baslik="🚛 Boş Şasiler" sayi={sasi.length} renk="#d97706" bos="Boş şasi yok">
+                  {sasi.map(ch => (
+                    <div key={ch.id} className="bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-sm font-black text-amber-600">🚛 {ch.chassisNo}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">Müsait</span>
+                      </div>
+                      <div className="text-xs text-slate-400">{ch.plakaNo}</div>
+                      <div className="flex gap-1 flex-wrap mt-1.5">
+                        {(Array.isArray(ch.tip) ? ch.tip : ch.tip ? [ch.tip] : []).map(t => (
+                          <span key={t} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">{t}</span>
+                        ))}
+                      </div>
+                      <KonumSatiri konum={ch.sonKonum} />
+                    </div>
+                  ))}
+                </Bolum>
+              </div>
+            );
+          })()}
 
           {/* ══════════════════════════════════════════════════════ */}
           {/* FORECAST TAB                                          */}
